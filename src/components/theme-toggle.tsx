@@ -12,14 +12,7 @@ interface ThemeToggleProps {
 }
 
 export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
-  const { theme, setTheme, resolvedTheme } = useTheme()
-
-  // Wait for client to mount so the icon matches the hydrated theme
-  const [mounted, setMounted] = React.useState(false)
-  React.useEffect(() => setMounted(true), [])
-
-  const currentTheme = mounted ? (resolvedTheme || theme) : undefined
-  const showMoon = !currentTheme || currentTheme === 'light'
+  const { theme, setTheme } = useTheme()
 
   return (
     <Button
@@ -29,11 +22,10 @@ export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
       className="h-9 w-9 transition-all hover:scale-105 group"
       suppressHydrationWarning
     >
-      {showMoon ? (
-        <Moon className="h-4 w-4 text-white" />
-      ) : (
-        <Sun className="h-4 w-4 group-hover:text-white transition-colors" />
-      )}
+      {/* Render both icons and use CSS to show/hide based on document theme class */}
+      {/* This prevents flash because CSS handles visibility immediately, before React hydrates */}
+      <Moon className="h-4 w-4 text-white dark:hidden" />
+      <Sun className="h-4 w-4 group-hover:text-white transition-colors hidden dark:block" />
       <span className="sr-only">Toggle theme</span>
     </Button>
   )
