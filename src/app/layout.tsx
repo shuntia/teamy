@@ -6,6 +6,9 @@ import { FaviconLoader } from '@/components/favicon-loader'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { Analytics } from '@vercel/analytics/next'
 import { DiscordBanner } from '@/components/discord-banner'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
 export const metadata: Metadata = {
   title: 'Teamy',
@@ -23,19 +26,183 @@ export const viewport: Viewport = {
   userScalable: true,
 }
 
-export default function RootLayout({
+function generateBackgroundStyles(preferences: Record<string, unknown> | null): string {
+  const bgType = preferences?.backgroundType as string | undefined
+  const isGrid = !bgType || bgType === 'grid'
+  
+  let backgroundCss = ''
+  
+  if (isGrid) {
+    // Default grid pattern - html gets default background, body is transparent with grid-pattern class
+    backgroundCss = `
+      html {
+        background: hsl(var(--background)) !important;
+        background-image: none !important;
+      }
+      body {
+        background: transparent !important;
+        background-image: none !important;
+      }
+    `
+  } else if (bgType === 'solid' && preferences?.backgroundColor) {
+    const color = preferences.backgroundColor as string
+    // Escape the color for CSS (basic sanitization)
+    const safeColor = color.replace(/[<>'"]/g, '')
+    backgroundCss = `
+      html, body {
+        background: ${safeColor} !important;
+        background-image: none !important;
+        background-attachment: fixed !important;
+      }
+      body.grid-pattern, html.grid-pattern, .grid-pattern {
+        background: ${safeColor} !important;
+        background-image: none !important;
+      }
+      .bg-slate-50, .bg-slate-900, .dark\\:bg-slate-900,
+      [class*="bg-slate"], section.bg-slate-50, section.bg-slate-900,
+      section[class*="bg-slate"], div.bg-slate-50, div.bg-slate-900,
+      div[class*="bg-slate"], div.bg-background, section.bg-background {
+        background-color: transparent !important;
+        background: transparent !important;
+      }
+    `
+  } else if (bgType === 'gradient' && Array.isArray(preferences?.gradientColors)) {
+    const gradientColors = preferences.gradientColors as string[]
+    if (gradientColors.length >= 2) {
+      const gradientStops = gradientColors
+        .map((color, index) => {
+          const safeColor = color.replace(/[<>'"]/g, '')
+          return `${safeColor} ${(index / (gradientColors.length - 1)) * 100}%`
+        })
+        .join(', ')
+      const direction = ((preferences.gradientDirection as string) || '135deg').replace(/[<>'"]/g, '')
+      const gradient = `linear-gradient(${direction}, ${gradientStops})`
+      backgroundCss = `
+        html, body {
+          background: ${gradient} !important;
+          background-image: ${gradient} !important;
+          background-attachment: fixed !important;
+        }
+        body.grid-pattern, html.grid-pattern, .grid-pattern {
+          background: ${gradient} !important;
+          background-image: ${gradient} !important;
+        }
+        .bg-slate-50, .bg-slate-900, .dark\\:bg-slate-900,
+        [class*="bg-slate"], section.bg-slate-50, section.bg-slate-900,
+        section[class*="bg-slate"], div.bg-slate-50, div.bg-slate-900,
+        div[class*="bg-slate"], div.bg-background, section.bg-background {
+          background-color: transparent !important;
+          background: transparent !important;
+        }
+      `
+    } else {
+      // Invalid gradient, fall back to grid
+      backgroundCss = `
+        html {
+          background: hsl(var(--background)) !important;
+          background-image: none !important;
+        }
+        body {
+          background: transparent !important;
+          background-image: none !important;
+        }
+      `
+    }
+  } else if (bgType === 'image' && preferences?.backgroundImageUrl) {
+    const imageUrl = (preferences.backgroundImageUrl as string).replace(/[<>'"]/g, '')
+    backgroundCss = `
+      html, body {
+        background-image: url("${imageUrl}") !important;
+        background-color: transparent !important;
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: fixed !important;
+      }
+      body.grid-pattern, html.grid-pattern, .grid-pattern {
+        background-image: url("${imageUrl}") !important;
+        background-color: transparent !important;
+      }
+      .bg-slate-50, .bg-slate-900, .dark\\:bg-slate-900,
+      [class*="bg-slate"], section.bg-slate-50, section.bg-slate-900,
+      section[class*="bg-slate"], div.bg-slate-50, div.bg-slate-900,
+      div[class*="bg-slate"], div.bg-background, section.bg-background {
+        background-color: transparent !important;
+        background: transparent !important;
+      }
+    `
+  } else {
+    // Fallback to grid
+    backgroundCss = `
+      html {
+        background: hsl(var(--background)) !important;
+        background-image: none !important;
+      }
+      body {
+        background: transparent !important;
+        background-image: none !important;
+      }
+    `
+  }
+  
+  // Header always has static background
+  const headerCss = `
+    header, header.bg-teamy-primary, header[class*="bg-teamy-primary"] {
+      background-color: #0056C7 !important;
+      background-image: none !important;
+      background: #0056C7 !important;
+    }
+    .dark header, .dark header.bg-teamy-primary, .dark header[class*="bg-teamy-primary"],
+    html.dark header, html.dark header.bg-teamy-primary {
+      background-color: rgb(15 23 42) !important;
+      background-image: none !important;
+      background: rgb(15 23 42) !important;
+    }
+  `
+  
+  return headerCss + backgroundCss
+}
+
+function generateBodyClass(preferences: Record<string, unknown> | null): string {
+  const bgType = preferences?.backgroundType as string | undefined
+  const isGrid = !bgType || bgType === 'grid'
+  return isGrid ? 'grid-pattern' : ''
+}
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Fetch user preferences server-side
+  let preferences: Record<string, unknown> | null = null
+  try {
+    const session = await getServerSession(authOptions)
+    if (session?.user?.id) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { preferences: true },
+      })
+      preferences = (user?.preferences as Record<string, unknown>) || null
+    }
+  } catch (error) {
+    // Silently fail - will default to grid pattern
+    console.error('Error fetching user preferences in layout:', error)
+  }
+
+  const backgroundStyles = generateBackgroundStyles(preferences)
+  const bodyClass = generateBodyClass(preferences)
+  
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased">
+      <body className={`font-sans antialiased ${bodyClass}`}>
+        {/* Critical blocking script: Apply styles immediately before any rendering */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
                 try {
+                  // Apply theme first
                   var theme = localStorage.getItem('theme');
                   var systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                   var resolvedTheme = theme || systemTheme;
@@ -44,9 +211,23 @@ export default function RootLayout({
                   } else {
                     document.documentElement.classList.remove('dark');
                   }
-                } catch (e) {}
+                  
+                  // Immediately inject background styles into head before any paint
+                  var style = document.createElement('style');
+                  style.id = 'user-background-styles-inline';
+                  style.textContent = ${JSON.stringify(backgroundStyles)};
+                  (document.head || document.getElementsByTagName('head')[0] || document.documentElement).appendChild(style);
+                } catch (e) {
+                  console.error('Error applying initial styles:', e);
+                }
               })();
             `,
+          }}
+        />
+        {/* Also include style tag for SSR/hydration compatibility */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: backgroundStyles,
           }}
         />
         <FaviconLoader />

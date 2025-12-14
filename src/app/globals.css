@@ -74,12 +74,27 @@
   }
   
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Backgrounds are handled by inline styles in layout.tsx to prevent flash */
+  /* No default background on html/body - inline styles will set it */
+  html {
+    background: transparent;
+  }
+  
+  body {
+    background: transparent;
+  }
+  
+  /* Grid pattern is applied via class */
+  body.grid-pattern {
+    background: transparent;
   }
   
   h1, h2, h3, h4, h5, h6 {

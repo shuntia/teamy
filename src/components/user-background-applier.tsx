@@ -7,12 +7,12 @@ export function UserBackgroundApplier() {
   const { data: session, status } = useSession()
 
   useEffect(() => {
-    // Create or get style element
-    let styleEl = document.getElementById('user-background-styles') as HTMLStyleElement | null
+    // Use the same style element that was created by the server-side script, or create a new one
+    let styleEl = document.getElementById('user-background-styles-inline') as HTMLStyleElement | null
     
     if (!styleEl) {
       styleEl = document.createElement('style')
-      styleEl.id = 'user-background-styles'
+      styleEl.id = 'user-background-styles-inline'
       document.head.appendChild(styleEl)
     }
 
