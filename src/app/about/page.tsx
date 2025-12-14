@@ -31,7 +31,7 @@ export default function AboutPage() {
 
         {/* Hero Section */}
         <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold mb-6">
+          <h1 className="font-heading text-4xl md:text-5xl font-bold text-foreground mb-6">
             About Teamy
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">

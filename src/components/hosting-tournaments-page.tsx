@@ -159,7 +159,7 @@ export function HostingTournamentsPage() {
 
           {/* Header */}
           <div className="text-center space-y-3 sm:space-y-4">
-            <h1 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold text-foreground px-4">
+            <h1 className="font-heading text-4xl md:text-5xl font-bold text-foreground px-4">
               Host Tournaments
             </h1>
             <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto px-4">
