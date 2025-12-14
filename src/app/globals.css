@@ -90,12 +90,13 @@
 }
 
 @layer utilities {
-  /* Grid Pattern - Consistent 24px spacing */
+  /* Grid Pattern - Consistent 24px spacing, fixed position */
   .grid-pattern {
     background-image: 
       linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
       linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
     background-size: 24px 24px;
+    background-attachment: fixed;
   }
   
   .dark .grid-pattern {
@@ -103,6 +104,7 @@
       linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
     background-size: 24px 24px;
+    background-attachment: fixed;
   }
 
   /* Teamy Brand Hero Background */

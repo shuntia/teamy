@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Trophy, Plus, Loader2, CheckCircle2 } from 'lucide-react'
+import { Trophy, Plus, Loader2, CheckCircle2, ArrowLeft } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -151,13 +151,19 @@ export function HostingTournamentsPage() {
       {/* Main Content */}
       <section className="flex-1 px-4 sm:px-6 py-8 sm:py-12 bg-slate-50 dark:bg-slate-900 grid-pattern overflow-x-hidden">
         <div className="max-w-6xl mx-auto space-y-8 sm:space-y-12">
+          {/* Back link */}
+          <Link href="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-sm font-medium">Back to home</span>
+          </Link>
+
           {/* Header */}
           <div className="text-center space-y-3 sm:space-y-4">
             <h1 className="font-heading text-3xl sm:text-4xl md:text-5xl font-extrabold text-foreground px-4">
-              Hosting Tournaments
+              Host Tournaments
             </h1>
             <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto px-4">
-              Host your Science Olympiad tournament on teamy.site. Our platform streamlines every aspect of tournament management all in one place.
+              Host your Science Olympiad tournament on teamy. Our platform streamlines every aspect of tournament management all in one place.
             </p>
           </div>
 
@@ -473,6 +479,16 @@ export function HostingTournamentsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Questions Link */}
+          <div className="mt-8 text-center">
+            <p className="text-muted-foreground">
+              Have questions about hosting a tournament?{' '}
+              <Link href="/contact" className="text-teamy-primary hover:underline font-semibold">
+                Click here to contact us
+              </Link>
+            </p>
+          </div>
 
         </div>
       </section>

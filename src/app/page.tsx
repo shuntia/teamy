@@ -78,22 +78,13 @@ export default async function HomePage() {
             </div>
           </ScrollAnimate>
 
-          {/* Stats */}
+          {/* Demo Video */}
           <ScrollAnimate animation="fade-scale" delay={500} duration={800}>
-            <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 pt-8 text-muted-foreground">
-              <div className="text-center">
-                <div className="text-3xl md:text-4xl font-bold text-foreground">100%</div>
-                <div className="text-sm font-medium">Free to start</div>
-              </div>
-              <div className="h-12 w-px bg-border hidden sm:block" />
-              <div className="text-center">
-                <div className="text-3xl md:text-4xl font-bold text-foreground">2026</div>
-                <div className="text-sm font-medium">Events included</div>
-              </div>
-              <div className="h-12 w-px bg-border hidden sm:block" />
-              <div className="text-center">
-                <div className="text-3xl md:text-4xl font-bold text-foreground">AI</div>
-                <div className="text-sm font-medium">Powered grading</div>
+            <div className="pt-8 px-4 max-w-3xl mx-auto">
+              <div className="rounded-2xl border-2 border-teamy-primary/20 bg-card p-8 text-center">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-teamy-primary/10 text-teamy-primary font-semibold">
+                  DEMO VIDEO COMING SOON
+                </div>
               </div>
             </div>
           </ScrollAnimate>

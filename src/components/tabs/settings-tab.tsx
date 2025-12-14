@@ -1214,7 +1214,7 @@ export function SettingsTab({
           </div>
           <div>
             <p className="text-sm font-medium">Division</p>
-            <Badge>{club.division}</Badge>
+            <Badge variant="outline" className="text-foreground">{club.division}</Badge>
           </div>
           <div>
             <p className="text-sm font-medium">Members</p>
@@ -1227,71 +1227,6 @@ export function SettingsTab({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Background Personalization</CardTitle>
-          <CardDescription>
-            Choose the background you&apos;d like to see. Changes here affect only your view of this club.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="background-type">Background Type</Label>
-            <Select value={backgroundType} onValueChange={(value) => setBackgroundType(value as BackgroundOption)}>
-              <SelectTrigger id="background-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="grid">Grid Pattern (Default)</SelectItem>
-                <SelectItem value="solid">Solid Color</SelectItem>
-                <SelectItem value="gradient">Gradient</SelectItem>
-                <SelectItem value="image">Image</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {renderBackgroundControls()}
-
-          {/* Preview */}
-          <div className="space-y-2">
-            <Label>Preview</Label>
-            <div
-              className="h-32 rounded-lg border-2 border-border overflow-hidden"
-              style={{
-                background:
-                  previewType === 'grid'
-                    ? 'linear-gradient(to right, #80808012 1px, transparent 1px), linear-gradient(to bottom, #80808012 1px, transparent 1px)'
-                    : previewType === 'solid'
-                    ? previewColors.color
-                    : previewType === 'gradient'
-                    ? `linear-gradient(${previewColors.gradientDirection}, ${previewColors.gradientColors.map((color, index) => 
-                        `${color} ${(index / (previewColors.gradientColors.length - 1)) * 100}%`
-                      ).join(', ')})`
-                    : previewType === 'image' && previewColors.image
-                    ? `url(${previewColors.image})`
-                    : 'linear-gradient(to right, #80808012 1px, transparent 1px), linear-gradient(to bottom, #80808012 1px, transparent 1px)',
-                backgroundSize:
-                  previewType === 'grid'
-                    ? '24px 24px'
-                    : previewType === 'image'
-                    ? 'cover'
-                    : 'auto',
-                backgroundPosition: previewType === 'image' ? 'center' : 'auto',
-                backgroundRepeat: previewType === 'image' ? 'no-repeat' : 'repeat',
-              }}
-            />
-          </div>
-
-          <Button
-            onClick={handleSaveBackground}
-            disabled={savingBackground}
-            className="w-full"
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {savingBackground ? 'Saving...' : 'Save Background'}
-          </Button>
-        </CardContent>
-      </Card>
 
       {isAdmin && (
         <Card>

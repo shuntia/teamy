@@ -1,18 +1,6 @@
 import { PublicPageLayout } from '@/components/public-page-layout'
-import { 
-  ArrowLeft, Check, Server, Mail, Cloud, Database, Globe, Cpu, Calculator, Heart
-} from 'lucide-react'
+import { ArrowLeft, Check, Zap } from 'lucide-react'
 import Link from 'next/link'
-
-const costs = [
-  { icon: Calculator, name: 'Desmos', amount: '$1,200', period: '/yr', description: 'Built-in calculator' },
-  { icon: Mail, name: 'Emails', amount: '$330', period: '/yr', description: 'Notifications' },
-  { icon: Server, name: 'Hosting', amount: '$240', period: '/yr', description: 'App servers' },
-  { icon: Cloud, name: 'Cloud Storage', amount: '$100', period: '/yr', description: 'File uploads' },
-  { icon: Database, name: 'Database', amount: '$60', period: '/yr', description: 'PostgreSQL' },
-  { icon: Globe, name: 'Domain', amount: '$50', period: '/yr', description: 'teamy.site' },
-  { icon: Cpu, name: 'AI Tokens', amount: '$20', period: '/yr', description: 'OpenAI' },
-]
 
 const plans = [
   {
@@ -25,13 +13,13 @@ const plans = [
       'All core features',
     ],
     cta: 'Get Started',
+    ctaLink: '/login',
     highlighted: false,
   },
   {
     name: 'Pro',
     price: '$5',
     period: '/month',
-    altPrice: '$50/year',
     features: [
       'Unlimited clubs',
       'Unlimited AI tokens',
@@ -40,37 +28,30 @@ const plans = [
       '5 club boosts included',
     ],
     cta: 'Upgrade to Pro',
+    ctaLink: '/dashboard/billing',
     highlighted: true,
   },
 ]
 
-const boosts = [
+const boostTiers = [
   {
     tier: 'Tier 1',
     boosts: '0 boosts',
-    price: 'Free',
     features: ['60 max members', '50MB storage/month'],
   },
   {
     tier: 'Tier 2',
     boosts: '5 boosts',
-    price: '$5',
     features: ['Unlimited members', '100MB storage/month'],
   },
   {
     tier: 'Tier 3',
     boosts: '10 boosts',
-    price: '$10',
     features: ['Unlimited members', 'Unlimited storage'],
   },
 ]
 
 export default function PricingPage() {
-  const totalCost = costs.reduce((sum, cost) => {
-    const amount = parseFloat(cost.amount.replace('$', '').replace(',', ''))
-    return sum + amount
-  }, 0)
-
   return (
     <PublicPageLayout>
       <div className="py-16 px-4 sm:px-6">
@@ -91,49 +72,17 @@ export default function PricingPage() {
             </p>
           </div>
 
-          {/* Cost Breakdown */}
-          <div className="mb-20">
-            <div className="text-center mb-8">
-              <h2 className="font-heading text-2xl font-bold text-foreground mb-2">Running Costs</h2>
-              <p className="text-muted-foreground">What it costs to maintain teamy.site</p>
-            </div>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 mb-8">
-              {costs.map((cost) => (
-                <div
-                  key={cost.name}
-                  className="p-4 rounded-xl bg-card border border-border text-center shadow-sm"
-                >
-                  <cost.icon className="h-6 w-6 text-teamy-primary mx-auto mb-2" />
-                  <div className="text-xs text-muted-foreground mb-1">{cost.name}</div>
-                  <div className="text-lg font-bold text-foreground">
-                    {cost.amount}
-                    <span className="text-xs text-muted-foreground">{cost.period}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="text-center p-6 rounded-2xl bg-card border border-border shadow-card">
-              <div className="text-sm text-muted-foreground mb-1">Total annual cost</div>
-              <div className="text-4xl font-bold text-teamy-primary">${totalCost.toLocaleString()}/yr</div>
-              <p className="text-sm text-muted-foreground mt-2 flex items-center justify-center gap-1">
-                <Heart className="h-4 w-4 text-rose-500" />
-                Does not include countless hours of development
-              </p>
-            </div>
-          </div>
-
           {/* Mission Statement */}
           <div className="text-center mb-12 p-8 rounded-2xl bg-teamy-primary/5 border border-teamy-primary/20">
             <p className="text-lg text-foreground leading-relaxed max-w-3xl mx-auto">
-              Even though our goal is <span className="font-semibold">not to make a profit</span>, 
-              we offer paid plans to help mitigate the costs and keep Teamy free for everyone.
+              Teamy costs thousands of dollars and hours yearly to maintain. Even though our goal is{' '}
+              <span className="font-semibold">not to make a profit</span>, we offer paid features to help 
+              mitigate the costs and keep Teamy accessible for everyone.
             </p>
           </div>
 
           {/* Plans */}
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-20">
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-12">
             {plans.map((plan) => (
               <div
                 key={plan.name}
@@ -155,9 +104,6 @@ export default function PricingPage() {
                     <span className="text-4xl font-bold text-foreground">{plan.price}</span>
                     <span className="text-muted-foreground">{plan.period}</span>
                   </div>
-                  {plan.altPrice && (
-                    <div className="text-sm text-muted-foreground mt-1">or {plan.altPrice}</div>
-                  )}
                 </div>
 
                 <ul className="space-y-3 mb-8">
@@ -169,7 +115,7 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                <Link href="/login">
+                <Link href={plan.ctaLink}>
                   <button
                     className={`w-full py-3 rounded-xl font-semibold transition-all duration-300 ${
                       plan.highlighted
@@ -184,43 +130,51 @@ export default function PricingPage() {
             ))}
           </div>
 
-          {/* Club Boosts */}
-          <div className="mb-16">
-            <div className="text-center mb-8">
-              <h2 className="font-heading text-2xl font-bold text-foreground mb-2">Club Boosts</h2>
-              <p className="text-muted-foreground">$1 each — Upgrade your club&apos;s limits</p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-              {boosts.map((boost, index) => (
-                <div
-                  key={boost.tier}
-                  className={`p-6 rounded-2xl text-center ${
-                    index === 2
-                      ? 'bg-teamy-primary/5 border-2 border-teamy-primary'
-                      : 'bg-card border border-border shadow-card'
-                  }`}
-                >
-                  <div className="text-sm text-muted-foreground mb-1">{boost.boosts}</div>
-                  <h3 className="font-heading text-xl font-bold mb-2 text-foreground">{boost.tier}</h3>
-                  <div className="text-2xl font-bold text-teamy-primary mb-4">{boost.price}</div>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    {boost.features.map((feature) => (
-                      <li key={feature}>{feature}</li>
-                    ))}
-                  </ul>
+          {/* Club Boosts - Single Box */}
+          <div className="max-w-4xl mx-auto">
+            <div className="p-8 rounded-2xl bg-card border border-border shadow-card">
+              {/* Header */}
+              <div className="text-center mb-8">
+                <div className="inline-flex items-center gap-2 mb-2">
+                  <Zap className="h-6 w-6 text-teamy-primary" />
+                  <h2 className="font-heading text-2xl font-bold text-foreground">Club Boosts</h2>
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="flex items-baseline justify-center gap-1 mb-2">
+                  <span className="text-4xl font-bold text-foreground">$1</span>
+                  <span className="text-muted-foreground">each/month</span>
+                </div>
+                <p className="text-muted-foreground">Upgrade your club&apos;s limits</p>
+              </div>
 
-          {/* CTA */}
-          <div className="text-center">
-            <Link href="/login">
-              <button className="px-8 py-4 text-lg font-semibold bg-teamy-primary text-white rounded-full hover:bg-teamy-primary-dark transition-colors shadow-lg hover:shadow-xl">
-                Get started today
-              </button>
-            </Link>
+              {/* Tiers Grid */}
+              <div className="grid md:grid-cols-3 gap-6 mb-8">
+                {boostTiers.map((tier, index) => (
+                  <div
+                    key={tier.tier}
+                    className={`p-5 rounded-xl text-center ${
+                      index === 2
+                        ? 'bg-teamy-primary/10 border border-teamy-primary/30'
+                        : 'bg-muted/50 border border-border'
+                    }`}
+                  >
+                    <div className="text-sm text-muted-foreground mb-1">{tier.boosts}</div>
+                    <h3 className="font-heading text-lg font-bold mb-3 text-foreground">{tier.tier}</h3>
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {tier.features.map((feature) => (
+                        <li key={feature}>{feature}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+
+              {/* Get Boosts Button */}
+              <Link href="/dashboard/billing">
+                <button className="w-full py-3 rounded-xl font-semibold bg-teamy-primary text-white hover:bg-teamy-primary-dark transition-all duration-300">
+                  Get Boosts
+                </button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>

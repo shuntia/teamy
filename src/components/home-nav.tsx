@@ -15,6 +15,7 @@ const navItems: NavItem[] = [
   { label: 'Features', href: '/features' },
   { label: 'Pricing', href: '/pricing' },
   { label: 'Host Tournaments', href: '/tournaments' },
+  { label: 'Grants', href: '/grants' },
   { label: 'Blog', href: '/blog' },
   { label: 'About', href: '/about' },
   { label: 'Contact', href: '/contact' },
