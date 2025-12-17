@@ -1968,7 +1968,7 @@ export function TDTournamentManageClient({
                     {filteredRegistrations.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <Search className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                        <p>No registrations found matching "{teamsSearchQuery}"</p>
+                        <p>No registrations found matching &ldquo;{teamsSearchQuery}&rdquo;</p>
                       </div>
                     ) : (
                       <Table>
