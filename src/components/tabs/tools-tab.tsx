@@ -1089,8 +1089,12 @@ function AIAssistantPage() {
 // Resources organized by event
 interface Resource {
   title: string
-  url: string
+  url: string | null
   type: 'wiki' | 'textbook' | 'video' | 'practice' | 'misc'
+  id?: string
+  isClubResource?: boolean
+  isApproved?: boolean
+  canDelete?: boolean
 }
 
 interface EventResources {
