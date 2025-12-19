@@ -21,6 +21,7 @@ const settingsSchema = z.object({
   otherDiscounts: z.string().nullable().optional(),
   eligibilityRequirements: z.string().nullable().optional(),
   eventsRun: z.string().nullable().optional(),
+  trialEvents: z.string().nullable().optional(),
 })
 
 async function isTournamentAdmin(userId: string, tournamentId: string): Promise<boolean> {
@@ -131,6 +132,9 @@ export async function PATCH(
     }
     if (validatedData.eventsRun !== undefined) {
       updateData.eventsRun = validatedData.eventsRun
+    }
+    if (validatedData.trialEvents !== undefined) {
+      updateData.trialEvents = validatedData.trialEvents
     }
 
     const updatedTournament = await prisma.tournament.update({

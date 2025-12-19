@@ -77,6 +77,7 @@ interface Tournament {
   lateFeeStartDate: string | null
   eligibilityRequirements: string | null
   eventsRun: string | null
+  trialEvents: string | null
 }
 
 interface Section {
@@ -554,6 +555,63 @@ export function TournamentPageClient({ hostingRequest, tournament, isDirector, u
                       </div>
                     </div>
                   </div>
+
+                  {/* Trial Events */}
+                  {tournament.trialEvents && (() => {
+                    try {
+                      const trialEvents = JSON.parse(tournament.trialEvents) as Array<{ name: string; division: string } | string>
+                      const normalizedTrialEvents = trialEvents.map(event => {
+                        if (typeof event === 'string') {
+                          return { name: event, division: 'B' }
+                        }
+                        return event
+                      })
+                      
+                      if (normalizedTrialEvents.length > 0) {
+                        return (
+                          <div className="flex items-start gap-3">
+                            <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
+                            <div className="flex-1">
+                              <p className="font-medium">Trial Events</p>
+                              <div className="mt-2">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {normalizedTrialEvents.map((trialEvent, index) => {
+                                    const showDivision = tournament.division === 'B&C'
+                                    return (
+                                      <Badge 
+                                        key={index} 
+                                        variant="outline" 
+                                        className="text-xs bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-400"
+                                      >
+                                        {showDivision ? (
+                                          <span>
+                                            {trialEvent.name}
+                                            <span className="text-muted-foreground">
+                                              {' '}(Trial, Div {trialEvent.division})
+                                            </span>
+                                          </span>
+                                        ) : (
+                                          <span>
+                                            {trialEvent.name}
+                                            <span className="text-muted-foreground">
+                                              {' '}(Trial)
+                                            </span>
+                                          </span>
+                                        )}
+                                      </Badge>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }
+                    } catch (e) {
+                      console.error('Error parsing trial events:', e)
+                    }
+                    return null
+                  })()}
                 </CardContent>
               </Card>
             )}

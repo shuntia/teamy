@@ -277,10 +277,31 @@ export async function GET(request: NextRequest) {
 
     const requests = await prisma.tournamentHostingRequest.findMany({
       where,
+      include: {
+        tournament: {
+          select: {
+            id: true,
+            published: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({ requests })
+    // Filter out requests where the tournament exists but is not published
+    // Only show requests that either:
+    // 1. Don't have a tournament yet (shouldn't happen for APPROVED, but just in case)
+    // 2. Have a tournament that is published
+    const filteredRequests = requests.filter(request => {
+      if (!request.tournament) {
+        // If no tournament exists, don't show it (approved requests should have tournaments)
+        return false
+      }
+      // Only show if tournament is published
+      return request.tournament.published === true
+    })
+
+    return NextResponse.json({ requests: filteredRequests })
   } catch (error) {
     console.error('Error fetching tournament hosting requests:', error)
     return NextResponse.json(

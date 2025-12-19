@@ -314,7 +314,10 @@ export async function POST(req: NextRequest) {
           testId: baseTest.id,
           actorMembershipId: membership.id,
           action: 'CREATE',
-          details: { testName: baseTest.name },
+          details: { 
+            testName: baseTest.name,
+            clubId: baseTest.clubId, // Store clubId for querying after deletion
+          },
         },
       })
 

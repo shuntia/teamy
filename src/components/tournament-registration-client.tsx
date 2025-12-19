@@ -216,7 +216,7 @@ export function TournamentRegistrationClient({
   const tournamentSlug = tournament.slug || tournament.id
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/10 bg-teamy-primary dark:bg-slate-900 shadow-nav">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
@@ -240,7 +240,7 @@ export function TournamentRegistrationClient({
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+      <main className="container mx-auto px-4 py-8 max-w-6xl flex-1">
         {/* Back link */}
         <Link 
           href={`/tournaments/${tournamentSlug}`}
@@ -653,20 +653,16 @@ export function TournamentRegistrationClient({
       </main>
 
       {/* Footer */}
-      <footer className="border-t mt-12">
+      <footer className="border-t mt-auto">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Logo size="sm" showText={false} />
-              <span className="text-sm text-muted-foreground">
-                © {new Date().getFullYear()} Teamy. All rights reserved.
-              </span>
-            </div>
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
               <Link href="/terms" className="hover:text-foreground">Terms</Link>
               <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
-              <Link href="/contact" className="hover:text-foreground">Contact</Link>
             </div>
+            <span className="text-sm text-muted-foreground">
+              © {new Date().getFullYear()} Teamy. All rights reserved.
+            </span>
           </div>
         </div>
       </footer>

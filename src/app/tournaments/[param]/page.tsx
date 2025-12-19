@@ -157,6 +157,7 @@ export default async function TournamentPage({ params }: Props) {
     lateFeeStartDate: hostingRequest.tournament.lateFeeStartDate?.toISOString() || null,
     eligibilityRequirements: hostingRequest.tournament.eligibilityRequirements,
     eventsRun: hostingRequest.tournament.eventsRun,
+    trialEvents: hostingRequest.tournament.trialEvents,
   } : null
 
   return (

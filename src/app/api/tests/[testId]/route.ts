@@ -260,13 +260,17 @@ export async function PATCH(
       data: updateData,
     })
 
-    // Create audit log
+    // Create audit log with test name for reference even if test is deleted later
     await prisma.testAudit.create({
       data: {
         testId: test.id,
         actorMembershipId: membership.id,
         action: 'UPDATE',
-        details: { changes: Object.keys(updateData) },
+        details: { 
+          changes: Object.keys(updateData),
+          testName: test.name, // Store test name for reference
+          clubId: test.clubId, // Store clubId for querying after deletion
+        },
       },
     })
 
@@ -315,13 +319,17 @@ export async function DELETE(
       return NextResponse.json({ error: 'Membership not found' }, { status: 404 })
     }
 
-    // Create audit log before deletion
+    // Create audit log before deletion with all necessary info
+    // Store clubId so we can still query it after test is deleted
     await prisma.testAudit.create({
       data: {
         testId: test.id,
         actorMembershipId: membership.id,
         action: 'DELETE',
-        details: { testName: test.name },
+        details: { 
+          testName: test.name,
+          clubId: test.clubId, // Store clubId for querying after deletion
+        },
       },
     })
 

@@ -364,68 +364,88 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating ES test:', { staffId, tournamentId, eventId, name })
     
-    // Create the test with questions
-    const test = await prisma.eSTest.create({
-      data: {
-        staffId,
-        createdByStaffId: staffId, // Track original creator
-        tournamentId,
-        eventId: eventId || null, // Ensure we store null if not provided
-        name,
-        description,
-        instructions,
-        durationMinutes: durationMinutes || 60,
-        questions: questions && questions.length > 0
-          ? {
-              create: questions.map((q, index) => ({
-                type: q.type,
-                promptMd: q.promptMd,
-                explanation: q.explanation,
-                points: q.points,
-                order: q.order ?? index,
-                shuffleOptions: q.shuffleOptions || false,
-                numericTolerance: q.numericTolerance,
-                options: q.options && q.options.length > 0
-                  ? {
-                      create: q.options.map((opt, optIndex) => ({
-                        label: opt.label,
-                        isCorrect: opt.isCorrect,
-                        order: opt.order ?? optIndex,
-                      })),
-                    }
-                  : undefined,
-              })),
-            }
-          : undefined,
-      },
-      include: {
-        event: {
-          select: {
-            id: true,
-            name: true,
+    // Create the test with questions and audit log in a transaction
+    const test = await prisma.$transaction(async (tx) => {
+      const createdTest = await tx.eSTest.create({
+        data: {
+          staffId,
+          createdByStaffId: staffId, // Track original creator
+          tournamentId,
+          eventId: eventId || null, // Ensure we store null if not provided
+          name,
+          description,
+          instructions,
+          durationMinutes: durationMinutes || 60,
+          questions: questions && questions.length > 0
+            ? {
+                create: questions.map((q, index) => ({
+                  type: q.type,
+                  promptMd: q.promptMd,
+                  explanation: q.explanation,
+                  points: q.points,
+                  order: q.order ?? index,
+                  shuffleOptions: q.shuffleOptions || false,
+                  numericTolerance: q.numericTolerance,
+                  options: q.options && q.options.length > 0
+                    ? {
+                        create: q.options.map((opt, optIndex) => ({
+                          label: opt.label,
+                          isCorrect: opt.isCorrect,
+                          order: opt.order ?? optIndex,
+                        })),
+                      }
+                    : undefined,
+                })),
+              }
+            : undefined,
+        },
+      })
+
+      // Create audit log for test creation
+      await tx.eSTestAudit.create({
+        data: {
+          testId: createdTest.id,
+          actorStaffId: staffId,
+          action: 'CREATE',
+          details: {
+            testName: createdTest.name,
+            eventId: eventId || null,
           },
         },
-        staff: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+      })
+
+      // Fetch the complete test with relations
+      return await tx.eSTest.findUnique({
+        where: { id: createdTest.id },
+        include: {
+          event: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          staff: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          questions: {
+            include: {
+              options: true,
+            },
+            orderBy: { order: 'asc' },
           },
         },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        questions: {
-          include: {
-            options: true,
-          },
-          orderBy: { order: 'asc' },
-        },
-      },
+      })
     })
 
     return NextResponse.json({ test })
@@ -497,6 +517,7 @@ export async function PUT(request: NextRequest) {
         event: {
           select: {
             id: true,
+            name: true,
           },
         },
       },
@@ -528,9 +549,12 @@ export async function PUT(request: NextRequest) {
     // (TDs might not have staff memberships)
     const isTD = await isTournamentDirector(session.user.id, session.user.email, existingTest.tournamentId)
 
-    // If TD, allow access
+    // Get the staff member who is making the edit
+    let editingStaff: { id: string } | null = null
+    
     if (isTD) {
-      // Continue with the update - TDs can edit any test in their tournament
+      // For TDs, find or use the first staff membership, or use the test's current staff
+      editingStaff = existingTest.staffId ? { id: existingTest.staffId } : null
     } else {
       // For non-TDs, check staff membership and event access
       if (!userStaffMemberships || userStaffMemberships.length === 0) {
@@ -546,7 +570,24 @@ export async function PUT(request: NextRequest) {
       if (!hasEventAccess) {
         return NextResponse.json({ error: 'Not authorized to edit this test' }, { status: 403 })
       }
+
+      // Use the first matching staff membership
+      editingStaff = userStaffMemberships[0] ? { id: userStaffMemberships[0].id } : null
     }
+
+    if (!editingStaff) {
+      return NextResponse.json({ error: 'Could not determine staff member' }, { status: 400 })
+    }
+
+    // Track what fields are being changed for audit log
+    const changedFields: string[] = []
+    if (name && name !== existingTest.name) changedFields.push('name')
+    if (description !== undefined && description !== existingTest.description) changedFields.push('description')
+    if (instructions !== undefined && instructions !== existingTest.instructions) changedFields.push('instructions')
+    if (durationMinutes && durationMinutes !== existingTest.durationMinutes) changedFields.push('durationMinutes')
+    if (status && status !== existingTest.status) changedFields.push('status')
+    if (eventId !== undefined && eventId !== existingTest.eventId) changedFields.push('eventId')
+    if (questions) changedFields.push('questions')
 
     // Use a transaction to update test and questions
     const updatedTest = await prisma.$transaction(async (tx) => {
@@ -562,6 +603,22 @@ export async function PUT(request: NextRequest) {
           ...(eventId !== undefined && { eventId }),
         },
       })
+
+      // Create audit log for the update
+      if (changedFields.length > 0) {
+        await tx.eSTestAudit.create({
+          data: {
+            testId: test.id,
+            actorStaffId: editingStaff.id,
+            action: 'UPDATE',
+            details: {
+              changes: changedFields,
+              testName: test.name,
+              eventName: existingTest.event?.name,
+            },
+          },
+        })
+      }
 
       // If questions are provided, update them
       if (questions) {
@@ -715,6 +772,7 @@ export async function DELETE(request: NextRequest) {
         event: {
           select: {
             id: true,
+            name: true,
           },
         },
       },
@@ -792,6 +850,33 @@ export async function DELETE(request: NextRequest) {
     if (!hasEventAccess && !isTournamentDirector) {
       return NextResponse.json({ error: 'Not authorized to delete this test' }, { status: 403 })
     }
+
+    // Get staff member for audit log
+    let deletingStaff: { id: string } | null = null
+    if (isTournamentDirector) {
+      deletingStaff = existingTest.staffId ? { id: existingTest.staffId } : null
+    } else if (userStaffMemberships && userStaffMemberships.length > 0) {
+      deletingStaff = { id: userStaffMemberships[0].id }
+    }
+
+    if (!deletingStaff) {
+      return NextResponse.json({ error: 'Could not determine staff member' }, { status: 400 })
+    }
+
+    // Create audit log before deletion
+    await prisma.eSTestAudit.create({
+      data: {
+        testId: testId,
+        actorStaffId: deletingStaff.id,
+        action: 'DELETE',
+        details: {
+          testName: existingTest.name,
+          eventName: existingTest.event?.name, // Store event name for deleted tests
+          eventId: existingTest.eventId,
+          tournamentId: existingTest.tournamentId, // Store for filtering after deletion
+        },
+      },
+    })
 
     await prisma.eSTest.delete({
       where: { id: testId },

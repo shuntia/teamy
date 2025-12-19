@@ -4,7 +4,8 @@ import { HostingTournamentsPage } from '@/components/hosting-tournaments-page'
 
 export default async function TournamentsPage() {
   const session = await getServerSession(authOptions)
+  const isLoggedIn = !!session?.user
 
   // Allow both logged-in and logged-out users to view public tournaments
-  return <HostingTournamentsPage />
+  return <HostingTournamentsPage isLoggedIn={isLoggedIn} />
 }

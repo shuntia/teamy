@@ -41,14 +41,13 @@ export function AppHeader({ user, showBackButton = false, backHref, title }: App
   const buttonHref = isOnTournamentsPage ? '/dashboard/club' : '/dashboard/tournaments'
   const ButtonIcon = isOnTournamentsPage ? Users : Trophy
   
-  // Show customization and billing on club and tournaments dashboard pages
-  const isOnClubDashboard = pathname?.startsWith('/dashboard/club') || 
-                            pathname?.startsWith('/dashboard/tournaments') ||
+  // Show customization and billing only on club dashboard pages (not tournament pages)
+  const isOnClubDashboard = pathname?.startsWith('/dashboard/club') ||
                             pathname === '/dashboard/customization' || 
                             pathname === '/dashboard/billing'
   const isOnESPortal = pathname?.startsWith('/es')
   const isOnTDPortal = pathname?.startsWith('/td')
-  const showCustomizationBilling = isOnClubDashboard && !isOnESPortal && !isOnTDPortal
+  const showCustomizationBilling = isOnClubDashboard && !isOnTournamentsPage && !isOnESPortal && !isOnTDPortal
 
   const handleSignOut = async () => {
     try {

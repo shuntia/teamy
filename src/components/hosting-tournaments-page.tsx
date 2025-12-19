@@ -1,16 +1,19 @@
 'use client'
 
-import { useState } from 'react'
-import { Trophy, Plus, Loader2, CheckCircle2, ArrowLeft } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Trophy, Plus, Loader2, CheckCircle2, ArrowLeft, Search, Monitor, User, Mail, ExternalLink, MapPin } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Logo } from '@/components/logo'
 import { HomeNav } from '@/components/home-nav'
 import { useToast } from '@/components/ui/use-toast'
+import { formatDivision } from '@/lib/utils'
 import Link from 'next/link'
 import {
   Dialog,
@@ -21,11 +24,38 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 
-export function HostingTournamentsPage() {
+interface HostingTournamentsPageProps {
+  isLoggedIn?: boolean
+}
+
+interface Tournament {
+  id: string
+  name: string
+  division: 'B' | 'C' | 'B&C'
+  description: string | null
+  isOnline: boolean
+  location: string | null
+  hostingRequest: {
+    division: string
+    tournamentLevel: string
+    tournamentFormat: string
+    directorName: string
+    directorEmail: string
+    preferredSlug: string | null
+  } | null
+}
+
+export function HostingTournamentsPage({ isLoggedIn = false }: HostingTournamentsPageProps) {
   const { toast } = useToast()
+  const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [tournaments, setTournaments] = useState<Tournament[]>([])
+  const [loadingTournaments, setLoadingTournaments] = useState(false)
+  const [search, setSearch] = useState('')
+  const [divisionFilter, setDivisionFilter] = useState<string>('all')
+  const [levelFilter, setLevelFilter] = useState<string>('all')
   const [formData, setFormData] = useState({
     tournamentName: '',
     tournamentLevel: '',
@@ -122,6 +152,160 @@ export function HostingTournamentsPage() {
     setSubmitted(false)
   }
 
+  // Load tournaments on mount
+  useEffect(() => {
+    loadTournaments()
+  }, [])
+
+  const loadTournaments = async () => {
+    try {
+      setLoadingTournaments(true)
+      const response = await fetch('/api/tournaments/public')
+      if (!response.ok) throw new Error('Failed to load tournaments')
+      const data = await response.json()
+      setTournaments(data.tournaments || [])
+    } catch (error) {
+      console.error('Failed to load tournaments:', error)
+    } finally {
+      setLoadingTournaments(false)
+    }
+  }
+
+  const filteredTournaments = tournaments.filter(t => {
+    const hostingRequest = t.hostingRequest
+    if (!hostingRequest) return false
+
+    // Division filter
+    if (divisionFilter !== 'all') {
+      if (divisionFilter === 'B' && !hostingRequest.division.includes('B')) return false
+      if (divisionFilter === 'C' && !hostingRequest.division.includes('C')) return false
+    }
+    // Level filter
+    if (levelFilter !== 'all' && hostingRequest.tournamentLevel !== levelFilter) {
+      return false
+    }
+    // Search
+    if (search) {
+      const searchLower = search.toLowerCase()
+      const nameMatch = t.name.toLowerCase().includes(searchLower)
+      const directorMatch = hostingRequest.directorName.toLowerCase().includes(searchLower)
+      const locationMatch = t.location?.toLowerCase().includes(searchLower) || false
+      if (!nameMatch && !directorMatch && !locationMatch) {
+        return false
+      }
+    }
+    return true
+  })
+
+  const getLevelLabel = (level: string) => {
+    return level.charAt(0).toUpperCase() + level.slice(1)
+  }
+
+  const getFormatLabel = (format: string) => {
+    switch (format) {
+      case 'in-person':
+        return 'In-Person'
+      case 'satellite':
+        return 'Satellite'
+      case 'mini-so':
+        return 'Mini SO'
+      default:
+        return format
+    }
+  }
+
+  const getTournamentSlug = (tournament: Tournament) => {
+    if (tournament.hostingRequest?.preferredSlug) {
+      return tournament.hostingRequest.preferredSlug
+    }
+    // Generate slug from tournament name
+    return tournament.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+  }
+
+  const handleTournamentClick = (tournament: Tournament) => {
+    const slug = getTournamentSlug(tournament)
+    if (!isLoggedIn) {
+      // Redirect to login with callback URL
+      const callbackUrl = `/tournaments/${slug}`
+      router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
+    } else {
+      // User is logged in, go directly to tournament
+      router.push(`/tournaments/${slug}`)
+    }
+  }
+
+  // Helper function to highlight search keywords in text
+  const highlightText = (text: string, searchQuery: string) => {
+    if (!searchQuery?.trim() || !text) {
+      return text
+    }
+
+    const query = searchQuery.trim()
+    const queryLower = query.toLowerCase()
+    const textLower = text.toLowerCase()
+    
+    // Find all occurrences of the query in the text
+    const indices: number[] = []
+    let index = textLower.indexOf(queryLower)
+    while (index !== -1) {
+      indices.push(index)
+      index = textLower.indexOf(queryLower, index + 1)
+    }
+
+    if (indices.length === 0) {
+      return text
+    }
+
+    // Build array of parts (text segments and highlighted segments)
+    const parts: Array<{ text: string; highlight: boolean }> = []
+    let lastIndex = 0
+
+    indices.forEach((startIndex) => {
+      // Add text before the match
+      if (startIndex > lastIndex) {
+        parts.push({
+          text: text.substring(lastIndex, startIndex),
+          highlight: false
+        })
+      }
+      // Add the highlighted match
+      parts.push({
+        text: text.substring(startIndex, startIndex + query.length),
+        highlight: true
+      })
+      lastIndex = startIndex + query.length
+    })
+
+    // Add remaining text after last match
+    if (lastIndex < text.length) {
+      parts.push({
+        text: text.substring(lastIndex),
+        highlight: false
+      })
+    }
+
+    return (
+      <>
+        {parts.map((part, index) => {
+          if (part.highlight) {
+            return (
+              <mark
+                key={index}
+                className="bg-yellow-200 dark:bg-yellow-900/50 text-foreground px-0.5 rounded font-medium"
+              >
+                {part.text}
+              </mark>
+            )
+          }
+          return <span key={index}>{part.text}</span>
+        })}
+      </>
+    )
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
@@ -132,16 +316,16 @@ export function HostingTournamentsPage() {
             <HomeNav 
               variant="light" 
               mobileButton={
-                <Link href="/login">
+                <Link href={isLoggedIn ? "/dashboard" : "/login"}>
                   <button className="w-full px-4 py-2.5 text-sm font-semibold bg-white text-teamy-primary rounded-full hover:bg-white/90 transition-colors shadow-sm">
-                    Sign In
+                    {isLoggedIn ? "Dashboard" : "Sign In"}
                   </button>
                 </Link>
               }
             />
-            <Link href="/login" className="hidden md:block">
+            <Link href={isLoggedIn ? "/dashboard" : "/login"} className="hidden md:block">
               <button className="px-5 md:px-6 py-2 md:py-2.5 text-xs md:text-sm font-semibold bg-white text-teamy-primary rounded-full hover:bg-white/90 transition-colors whitespace-nowrap shadow-sm">
-                Sign In
+                {isLoggedIn ? "Dashboard" : "Sign In"}
               </button>
             </Link>
           </div>
@@ -479,6 +663,131 @@ export function HostingTournamentsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Published Tournaments Section */}
+          <div className="mt-12 sm:mt-16 space-y-6 sm:space-y-8">
+            <div className="text-center space-y-3 sm:space-y-4">
+              <h2 className="font-heading text-3xl sm:text-4xl md:text-5xl font-bold text-foreground">
+                Tournaments
+              </h2>
+              <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto px-4">
+                Discover approved Science Olympiad tournaments
+              </p>
+            </div>
+
+            {/* Filters */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none z-10 shrink-0" />
+                  <Input
+                    placeholder="Search tournaments..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-12"
+                  />
+                </div>
+                <Select value={divisionFilter} onValueChange={setDivisionFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Division" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Divisions</SelectItem>
+                    <SelectItem value="B">Division B</SelectItem>
+                    <SelectItem value="C">Division C</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={levelFilter} onValueChange={setLevelFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <SelectValue placeholder="Level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Levels</SelectItem>
+                    <SelectItem value="invitational">Invitational</SelectItem>
+                    <SelectItem value="regional">Regional</SelectItem>
+                    <SelectItem value="state">State</SelectItem>
+                    <SelectItem value="national">National</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Tournament List */}
+            {loadingTournaments ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-teamy-primary"></div>
+                <p className="mt-4 text-muted-foreground">Loading tournaments...</p>
+              </div>
+            ) : filteredTournaments.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <Trophy className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No tournaments found</h3>
+                  <p className="text-muted-foreground">
+                    {search || divisionFilter !== 'all' || levelFilter !== 'all'
+                      ? 'Try adjusting your filters'
+                      : 'No approved tournaments at this time'}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {filteredTournaments.map((tournament) => {
+                  const hostingRequest = tournament.hostingRequest
+                  if (!hostingRequest) return null
+
+                  return (
+                    <Card
+                      key={tournament.id}
+                      className="hover:shadow-lg transition-all hover:border-teamy-primary/50 cursor-pointer h-full"
+                      onClick={() => handleTournamentClick(tournament)}
+                    >
+                      <CardHeader>
+                        <div className="flex items-center gap-2 mb-3 flex-wrap">
+                          <Badge variant="outline">Division {formatDivision(hostingRequest.division)}</Badge>
+                          <Badge variant="outline">{getLevelLabel(hostingRequest.tournamentLevel)}</Badge>
+                          <Badge variant="outline">{getFormatLabel(hostingRequest.tournamentFormat)}</Badge>
+                        </div>
+                        <CardTitle className="text-xl break-words leading-snug flex items-center gap-2">
+                          {highlightText(tournament.name, search)}
+                          <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
+                        </CardTitle>
+                        {tournament.description && (
+                          <CardDescription className="line-clamp-2">
+                            {tournament.description}
+                          </CardDescription>
+                        )}
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {hostingRequest.tournamentFormat === 'in-person' && tournament.location ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <MapPin className="h-4 w-4" />
+                            <span className="line-clamp-1">{highlightText(tournament.location, search)}</span>
+                          </div>
+                        ) : hostingRequest.tournamentFormat !== 'in-person' ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Monitor className="h-4 w-4" />
+                            <span>{getFormatLabel(hostingRequest.tournamentFormat)} Tournament</span>
+                          </div>
+                        ) : null}
+                        
+                        <div className="pt-3 border-t space-y-2">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <User className="h-4 w-4" />
+                            <span>Director: {highlightText(hostingRequest.directorName, search)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Mail className="h-4 w-4" />
+                            <span>{hostingRequest.directorEmail}</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Questions Link */}
           <div className="mt-8 text-center">

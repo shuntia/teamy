@@ -44,6 +44,8 @@ import {
   Globe,
   Lock,
   Loader2,
+  History,
+  User,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
@@ -70,6 +72,7 @@ interface StaffMember {
       division: string
     }
   }>
+  trialEvents?: string | null
   tests: Array<{
     id: string
     name: string
@@ -159,6 +162,7 @@ interface Tournament {
   otherDiscounts: string | null
   eligibilityRequirements: string | null
   eventsRun: string | null
+  trialEvents: string | null
   published: boolean
   // From hosting request
   level: string | null
@@ -263,6 +267,7 @@ export function TDTournamentManageClient({
     name: '',
     role: 'EVENT_SUPERVISOR' as 'EVENT_SUPERVISOR' | 'TOURNAMENT_DIRECTOR',
     eventIds: [] as string[],
+    trialEventNames: [] as string[],
   })
   const [inviting, setInviting] = useState(false)
 
@@ -272,6 +277,7 @@ export function TDTournamentManageClient({
   const [editStaffForm, setEditStaffForm] = useState({
     role: 'EVENT_SUPERVISOR' as 'EVENT_SUPERVISOR' | 'TOURNAMENT_DIRECTOR',
     eventIds: [] as string[],
+    trialEventNames: [] as string[],
   })
   const [updatingStaff, setUpdatingStaff] = useState(false)
   
@@ -305,7 +311,19 @@ export function TDTournamentManageClient({
     otherDiscounts: tournament.otherDiscounts ? JSON.parse(tournament.otherDiscounts) as OtherDiscount[] : [],
     eligibilityRequirements: tournament.eligibilityRequirements || '',
     eventsRun: tournament.eventsRun ? JSON.parse(tournament.eventsRun) as string[] : [],
+    trialEvents: tournament.trialEvents ? (() => {
+      const parsed = JSON.parse(tournament.trialEvents)
+      // Handle backward compatibility: convert string[] to { name, division }[]
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        if (typeof parsed[0] === 'string') {
+          return parsed.map((name: string) => ({ name, division: 'B' }))
+        }
+        return parsed as Array<{ name: string; division: string }>
+      }
+      return [] as Array<{ name: string; division: string }>
+    })() : [],
   })
+  const [newTrialEvent, setNewTrialEvent] = useState({ name: '', division: 'B' })
   const [newDiscount, setNewDiscount] = useState({ condition: '', amount: '' })
   const [hoveredTestBadge, setHoveredTestBadge] = useState<string | null>(null)
 
@@ -340,9 +358,69 @@ export function TDTournamentManageClient({
   const [searchQuery, setSearchQuery] = useState('')
   const [eventFilter, setEventFilter] = useState<string>('all')
   const [divisionFilter, setDivisionFilter] = useState<string>('all')
+  const [auditLogs, setAuditLogs] = useState<Array<{
+    id: string
+    testId: string
+    testName: string
+    eventName?: string | null
+    testType: 'Test' | 'ESTest'
+    action: string
+    actorName: string
+    actorEmail: string
+    createdAt: string
+    details: any
+  }>>([])
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false)
+  const [showAuditLogs, setShowAuditLogs] = useState(false)
+  const [auditLogSearch, setAuditLogSearch] = useState('')
+  const [auditLogSort, setAuditLogSort] = useState<'newest' | 'oldest'>('newest')
+
+  // Helper function to highlight search keywords
+  const highlightText = (text: string, searchTerm: string) => {
+    if (!searchTerm || !text) return text
+    
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+    const parts = text.split(regex)
+    
+    return parts.map((part, index) => 
+      regex.test(part) ? (
+        <mark key={index} className="bg-yellow-200 dark:bg-yellow-900/50 px-0.5 rounded">
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    )
+  }
+
+  // Filter and sort audit logs
+  const filteredAndSortedAuditLogs = auditLogs
+    .filter(log => {
+      if (!auditLogSearch) return true
+      const searchLower = auditLogSearch.toLowerCase()
+      return (
+        log.testName.toLowerCase().includes(searchLower) ||
+        (log.eventName && log.eventName.toLowerCase().includes(searchLower)) ||
+        log.actorName.toLowerCase().includes(searchLower) ||
+        log.actorEmail.toLowerCase().includes(searchLower)
+      )
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime()
+      const dateB = new Date(b.createdAt).getTime()
+      return auditLogSort === 'newest' ? dateB - dateA : dateA - dateB
+    })
   
   // Check if tournament is B&C
   const isBCTournament = tournament.division === 'B&C' || (typeof tournament.division === 'string' && tournament.division.includes('B') && tournament.division.includes('C'))
+  
+  // For backward compatibility, convert old trial events format (string[]) to new format ({ name, division }[])
+  const normalizedTrialEvents = settingsForm.trialEvents.map(event => {
+    if (typeof event === 'string') {
+      return { name: event, division: 'B' } // Default to B for old entries
+    }
+    return event
+  })
   
   // Delete test dialog state
   const [deleteTestDialogOpen, setDeleteTestDialogOpen] = useState(false)
@@ -453,6 +531,7 @@ export function TDTournamentManageClient({
           name: inviteForm.name || undefined,
           role: inviteForm.role,
           eventIds: inviteForm.role === 'EVENT_SUPERVISOR' ? inviteForm.eventIds : [],
+          trialEventNames: inviteForm.role === 'EVENT_SUPERVISOR' ? inviteForm.trialEventNames : [],
         }),
       })
 
@@ -462,7 +541,7 @@ export function TDTournamentManageClient({
           description: `An invitation has been sent to ${inviteForm.email}`,
         })
         setInviteDialogOpen(false)
-        setInviteForm({ email: '', name: '', role: 'EVENT_SUPERVISOR', eventIds: [] })
+        setInviteForm({ email: '', name: '', role: 'EVENT_SUPERVISOR', eventIds: [], trialEventNames: [] })
         fetchStaff()
       } else {
         const data = await res.json()
@@ -505,11 +584,13 @@ export function TDTournamentManageClient({
 
   const handleOpenEditStaff = (member: StaffMember) => {
     setEditingStaff(member)
+    const trialEvents = member.trialEvents ? JSON.parse(member.trialEvents) as string[] : []
     setEditStaffForm({
       role: member.role,
       eventIds: member.role === 'EVENT_SUPERVISOR'
         ? member.events.map(e => e.event.id)
         : [],
+      trialEventNames: member.role === 'EVENT_SUPERVISOR' ? trialEvents : [],
     })
     setEditStaffDialogOpen(true)
   }
@@ -521,6 +602,7 @@ export function TDTournamentManageClient({
       setEditStaffForm({
         role: 'EVENT_SUPERVISOR',
         eventIds: [],
+        trialEventNames: [],
       })
     }
   }
@@ -537,6 +619,7 @@ export function TDTournamentManageClient({
           staffId: editingStaff.id,
           role: editStaffForm.role,
           eventIds: editStaffForm.role === 'EVENT_SUPERVISOR' ? editStaffForm.eventIds : [],
+          trialEventNames: editStaffForm.role === 'EVENT_SUPERVISOR' ? editStaffForm.trialEventNames : [],
         }),
       })
 
@@ -791,6 +874,7 @@ export function TDTournamentManageClient({
           otherDiscounts: settingsForm.otherDiscounts.length > 0 ? JSON.stringify(settingsForm.otherDiscounts) : null,
           eligibilityRequirements: settingsForm.eligibilityRequirements || null,
           eventsRun: settingsForm.eventsRun.length > 0 ? JSON.stringify(settingsForm.eventsRun) : null,
+          trialEvents: settingsForm.trialEvents.length > 0 ? JSON.stringify(settingsForm.trialEvents) : null,
         }),
       })
 
@@ -908,6 +992,57 @@ export function TDTournamentManageClient({
       setLoadingEvents(false)
     }
   }
+
+  // Fetch audit logs
+  const fetchAuditLogs = async () => {
+    setLoadingAuditLogs(true)
+    try {
+      const res = await fetch(`/api/td/tournaments/${tournament.id}/audit-logs?t=${Date.now()}`)
+      if (res.ok) {
+        const data = await res.json()
+        setAuditLogs(data.auditLogs || [])
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to fetch audit logs',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      console.error('Failed to fetch audit logs:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch audit logs',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoadingAuditLogs(false)
+    }
+  }
+
+  // Auto-refresh audit logs when modal is open (silently in background)
+  useEffect(() => {
+    if (!showAuditLogs) return
+
+    // Fetch immediately when opened
+    fetchAuditLogs()
+
+    // Set up auto-refresh every 5 seconds (silent, no loading indicator)
+    const interval = setInterval(() => {
+      // Fetch without showing loading state for auto-refresh
+      fetch(`/api/td/tournaments/${tournament.id}/audit-logs?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+          setAuditLogs(data.auditLogs || [])
+        })
+        .catch(err => {
+          console.error('Auto-refresh audit logs error:', err)
+        })
+    }, 5000)
+
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAuditLogs])
 
   // Fetch events when events tab is activated
   useEffect(() => {
@@ -1277,6 +1412,45 @@ export function TDTournamentManageClient({
                                   </div>
                                 </div>
                               )}
+                              {/* Trial Events */}
+                              {normalizedTrialEvents.length > 0 && (
+                                <div className="space-y-2 mt-4">
+                                  <div className="flex items-center justify-between">
+                                    <Label>Trial Events</Label>
+                                  </div>
+                                  <div className="space-y-1 max-h-48 overflow-y-auto border rounded-lg p-3">
+                                    {normalizedTrialEvents.map((trialEvent, index) => (
+                                      <label 
+                                        key={index} 
+                                        className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded"
+                                      >
+                                        <Checkbox
+                                          checked={inviteForm.trialEventNames.includes(trialEvent.name)}
+                                          onCheckedChange={(checked) => {
+                                            if (checked) {
+                                              setInviteForm(prev => ({ 
+                                                ...prev, 
+                                                trialEventNames: [...prev.trialEventNames, trialEvent.name] 
+                                              }))
+                                            } else {
+                                              setInviteForm(prev => ({ 
+                                                ...prev, 
+                                                trialEventNames: prev.trialEventNames.filter(name => name !== trialEvent.name) 
+                                              }))
+                                            }
+                                          }}
+                                        />
+                                        <span className="flex items-center gap-2 flex-1 min-w-0">
+                                          <span className="truncate">{trialEvent.name}</span>
+                                          <Badge variant="outline" className="text-xs flex-shrink-0">
+                                            Div {trialEvent.division}
+                                          </Badge>
+                                        </span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -1412,7 +1586,7 @@ export function TDTournamentManageClient({
                       <Select
                         value={editStaffForm.role}
                         onValueChange={(value: 'EVENT_SUPERVISOR' | 'TOURNAMENT_DIRECTOR') =>
-                          setEditStaffForm(prev => ({ ...prev, role: value, eventIds: [] }))
+                          setEditStaffForm(prev => ({ ...prev, role: value, eventIds: [], trialEventNames: [] }))
                         }
                       >
                         <SelectTrigger id="edit-role">
@@ -1531,6 +1705,45 @@ export function TDTournamentManageClient({
                                       }}
                                     />
                                     <span>{event.name}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {/* Trial Events */}
+                          {normalizedTrialEvents.length > 0 && (
+                            <div className="space-y-2 mt-4">
+                              <div className="flex items-center justify-between">
+                                <Label>Trial Events</Label>
+                              </div>
+                              <div className="space-y-1 max-h-48 overflow-y-auto border rounded-lg p-3">
+                                {normalizedTrialEvents.map((trialEvent, index) => (
+                                  <label 
+                                    key={index} 
+                                    className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded"
+                                  >
+                                    <Checkbox
+                                      checked={editStaffForm.trialEventNames.includes(trialEvent.name)}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          setEditStaffForm(prev => ({ 
+                                            ...prev, 
+                                            trialEventNames: [...prev.trialEventNames, trialEvent.name] 
+                                          }))
+                                        } else {
+                                          setEditStaffForm(prev => ({ 
+                                            ...prev, 
+                                            trialEventNames: prev.trialEventNames.filter(name => name !== trialEvent.name) 
+                                          }))
+                                        }
+                                      }}
+                                    />
+                                    <span className="flex items-center gap-2 flex-1 min-w-0">
+                                      <span className="truncate">{trialEvent.name}</span>
+                                      <Badge variant="outline" className="text-xs flex-shrink-0">
+                                        Div {trialEvent.division}
+                                      </Badge>
+                                    </span>
                                   </label>
                                 ))}
                               </div>
@@ -1738,10 +1951,24 @@ export function TDTournamentManageClient({
                       View all events and manage tests for your tournament
                     </CardDescription>
                   </div>
-                  <Button onClick={fetchEventsWithTests} variant="outline">
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Refresh
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      onClick={() => {
+                        setShowAuditLogs(true)
+                        if (auditLogs.length === 0) {
+                          fetchAuditLogs()
+                        }
+                      }}
+                      variant="outline"
+                    >
+                      <History className="h-4 w-4 mr-2" />
+                      View Audit Log
+                    </Button>
+                    <Button onClick={fetchEventsWithTests} variant="outline">
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1790,6 +2017,13 @@ export function TDTournamentManageClient({
                                 {event.name}
                               </SelectItem>
                             ))}
+                          {normalizedTrialEvents.length > 0 && (
+                            normalizedTrialEvents.map((trialEvent, index) => (
+                              <SelectItem key={`trial-${index}`} value={`trial-${trialEvent.name}`}>
+                                {trialEvent.name} (Trial)
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1802,9 +2036,15 @@ export function TDTournamentManageClient({
                         if (isBCTournament && divisionFilter !== 'all' && event.division !== divisionFilter) {
                           return false
                         }
-                        // Filter by selected event
-                        if (eventFilter !== 'all' && event.id !== eventFilter) {
-                          return false
+                        // Filter by selected event (handle trial events)
+                        if (eventFilter !== 'all') {
+                          if (eventFilter.startsWith('trial-')) {
+                            // If filtering by trial event, skip regular events
+                            return false
+                          }
+                          if (event.id !== eventFilter) {
+                            return false
+                          }
                         }
                         // Show event if it has tests matching search query or no search query
                         if (!searchQuery) return true
@@ -1941,6 +2181,61 @@ export function TDTournamentManageClient({
                       })
                       .filter(Boolean)}
                     
+                    {/* Trial Events */}
+                    {normalizedTrialEvents.length > 0 && (
+                      normalizedTrialEvents
+                        .filter((trialEvent) => {
+                          // Filter by division (only for B&C tournaments)
+                          if (isBCTournament && divisionFilter !== 'all' && trialEvent.division !== divisionFilter) {
+                            return false
+                          }
+                          // Filter by selected event
+                          if (eventFilter !== 'all') {
+                            if (eventFilter === `trial-${trialEvent.name}`) {
+                              return true
+                            }
+                            return false
+                          }
+                          return true
+                        })
+                        .map((trialEvent, index) => (
+                          <div key={`trial-${index}`} className="space-y-3">
+                            <div className="flex items-center justify-between pb-2 border-b border-border">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-semibold text-lg">{trialEvent.name}</h3>
+                                  <Badge variant="outline" className="text-xs bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-400">
+                                    Trial
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    Div {trialEvent.division}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  Trial event
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  router.push(`/td/tests/new?tournamentId=${tournament.id}&trialEventName=${encodeURIComponent(trialEvent.name)}&trialEventDivision=${trialEvent.division}`)
+                                }}
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Create Test
+                              </Button>
+                            </div>
+                            {/* Show message if no tests exist for this trial event */}
+                            <div className="text-center py-6 bg-muted/50 rounded-lg border border-border">
+                              <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+                              <p className="text-sm text-muted-foreground">
+                                No tests created yet for this trial event.
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                    
                     {/* Show message if no events match filters */}
                     {[...eventsWithTests]
                       .filter(({ event, tests }) => {
@@ -1964,6 +2259,172 @@ export function TDTournamentManageClient({
                 )}
               </CardContent>
             </Card>
+
+            {/* Audit Log Dialog */}
+            <Dialog open={showAuditLogs} onOpenChange={setShowAuditLogs}>
+              <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <History className="h-5 w-5" />
+                    Audit Log
+                  </DialogTitle>
+                  <DialogDescription>
+                    View who created, edited, and deleted tests for this tournament
+                  </DialogDescription>
+                </DialogHeader>
+                {/* Search and Sort Controls */}
+                <div className="flex items-center gap-2 mb-4 px-1">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                    <Input
+                      placeholder="Search by test name, event, or user..."
+                      value={auditLogSearch}
+                      onChange={(e) => setAuditLogSearch(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Select value={auditLogSort} onValueChange={(value: 'newest' | 'oldest') => setAuditLogSort(value)}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="newest">Newest First</SelectItem>
+                        <SelectItem value="oldest">Oldest First</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  {loadingAuditLogs ? (
+                    <div className="flex-1 flex items-center justify-center py-12">
+                      <div className="text-center">
+                        <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin text-muted-foreground" />
+                        <p className="text-muted-foreground">Loading audit logs...</p>
+                      </div>
+                    </div>
+                  ) : auditLogs.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center py-12">
+                      <div className="text-center">
+                        <History className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                        <p className="text-muted-foreground">No audit logs found.</p>
+                      </div>
+                    </div>
+                  ) : filteredAndSortedAuditLogs.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center py-12">
+                      <div className="text-center">
+                        <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                        <p className="text-muted-foreground">No audit logs match your search.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1 overflow-y-auto border rounded-lg">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableRow>
+                            <TableHead>Action</TableHead>
+                            <TableHead>Test</TableHead>
+                            <TableHead>Event</TableHead>
+                            <TableHead>Actor</TableHead>
+                            <TableHead>Date & Time</TableHead>
+                            <TableHead>Details</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAndSortedAuditLogs.map((log) => (
+                            <TableRow key={log.id}>
+                              <TableCell>
+                                <Badge 
+                                  variant={
+                                    log.action === 'CREATE' ? 'default' :
+                                    log.action === 'UPDATE' ? 'outline' :
+                                    log.action === 'DELETE' ? 'destructive' :
+                                    'outline'
+                                  }
+                                  className={
+                                    log.action === 'CREATE' ? 'bg-green-500 hover:bg-green-600 text-white dark:bg-green-600 dark:hover:bg-green-700' :
+                                    log.action === 'UPDATE' ? 'bg-blue-500 hover:bg-blue-600 text-white dark:bg-blue-600 dark:hover:bg-blue-700 border-0' :
+                                    ''
+                                  }
+                                >
+                                  {log.action}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {highlightText(log.testName, auditLogSearch)}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">{log.testType}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {log.eventName ? (
+                                  <span className="text-sm">
+                                    {highlightText(log.eventName, auditLogSearch)}
+                                  </span>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4 text-muted-foreground" />
+                                  <div className="flex flex-col">
+                                    <span className="text-sm">
+                                      {highlightText(log.actorName, auditLogSearch)}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {highlightText(log.actorEmail, auditLogSearch)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm">
+                                  {format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {log.details && typeof log.details === 'object' ? (
+                                  <div className="text-sm text-muted-foreground">
+                                    {log.details.changes && Array.isArray(log.details.changes) ? (
+                                      <span>Changed: {log.details.changes.join(', ')}</span>
+                                    ) : log.details.testName ? (
+                                      <span>Test: {log.details.testName}</span>
+                                    ) : log.details.eventName ? (
+                                      <span>Event: {log.details.eventName}</span>
+                                    ) : (
+                                      <span>-</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button 
+                    onClick={fetchAuditLogs} 
+                    variant="outline" 
+                    disabled={loadingAuditLogs}
+                    size="sm"
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loadingAuditLogs ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                  <Button onClick={() => setShowAuditLogs(false)}>
+                    Close
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Teams Tab */}
@@ -2394,22 +2855,121 @@ export function TDTournamentManageClient({
                           </div>
                         </div>
                       )}
+                      {/* Trial Events */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-semibold text-foreground">Trial Events</h4>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Enter trial event name..."
+                              value={newTrialEvent.name}
+                              onChange={(e) => setNewTrialEvent(prev => ({ ...prev, name: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && newTrialEvent.name.trim()) {
+                                  e.preventDefault()
+                                  setSettingsForm(prev => ({
+                                    ...prev,
+                                    trialEvents: [...prev.trialEvents, { name: newTrialEvent.name.trim(), division: newTrialEvent.division }]
+                                  }))
+                                  setNewTrialEvent({ name: '', division: 'B' })
+                                }
+                              }}
+                              className="flex-1"
+                            />
+                            {isBCTournament && (
+                              <Select
+                                value={newTrialEvent.division}
+                                onValueChange={(value) => setNewTrialEvent(prev => ({ ...prev, division: value }))}
+                              >
+                                <SelectTrigger className="w-[100px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="B">Div B</SelectItem>
+                                  <SelectItem value="C">Div C</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (newTrialEvent.name.trim()) {
+                                  setSettingsForm(prev => ({
+                                    ...prev,
+                                    trialEvents: [...prev.trialEvents, { name: newTrialEvent.name.trim(), division: newTrialEvent.division }]
+                                  }))
+                                  setNewTrialEvent({ name: '', division: 'B' })
+                                }
+                              }}
+                              disabled={!newTrialEvent.name.trim()}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          {normalizedTrialEvents.length > 0 && (
+                            <div className="space-y-1 max-h-32 overflow-y-auto border rounded-lg p-3">
+                              {normalizedTrialEvents.map((trialEvent, index) => (
+                                <div
+                                  key={index}
+                                  className="flex items-center justify-between gap-2 text-sm p-2 rounded hover:bg-muted/50"
+                                >
+                                  <span className="flex items-center gap-2 flex-1 min-w-0">
+                                    <Badge variant="outline" className="bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-400 text-xs flex-shrink-0">
+                                      Trial
+                                    </Badge>
+                                    <span className="truncate">{trialEvent.name}</span>
+                                    <Badge variant="outline" className="text-xs flex-shrink-0">
+                                      Div {trialEvent.division}
+                                    </Badge>
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSettingsForm(prev => ({
+                                        ...prev,
+                                        trialEvents: prev.trialEvents.filter((_, i) => i !== index)
+                                      }))
+                                    }}
+                                    className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {settingsForm.eventsRun.length > 0 ? (
-                        settingsForm.eventsRun.map(eventId => {
-                          const event = events.find(e => e.id === eventId)
-                          return event ? (
-                            <Badge key={eventId} variant="secondary" className="flex items-center gap-1">
-                              {event.name}
-                              <span className="text-xs opacity-70">(Div {event.division})</span>
-                            </Badge>
-                          ) : null
-                        })
-                      ) : (
-                        <p className="text-muted-foreground">All events</p>
-                      )}
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {settingsForm.eventsRun.length > 0 ? (
+                          settingsForm.eventsRun.map(eventId => {
+                            const event = events.find(e => e.id === eventId)
+                            return event ? (
+                              <Badge key={eventId} variant="secondary" className="flex items-center gap-1">
+                                {event.name}
+                                <span className="text-xs opacity-70">(Div {event.division})</span>
+                              </Badge>
+                            ) : null
+                          })
+                        ) : (
+                          <p className="text-muted-foreground">All events</p>
+                        )}
+                        {normalizedTrialEvents.map((trialEvent, index) => (
+                          <Badge key={`trial-${index}`} variant="outline" className="flex items-center gap-1 bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-400">
+                            {trialEvent.name}
+                            <span className="text-xs opacity-70">(Trial, Div {trialEvent.division})</span>
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

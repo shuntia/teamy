@@ -6,7 +6,7 @@ import { NewTestBuilder } from '@/components/tests/new-test-builder'
 import { nanoid } from 'nanoid'
 
 interface Props {
-  searchParams: Promise<{ eventId?: string; tournamentId?: string }>
+  searchParams: Promise<{ eventId?: string; tournamentId?: string; trialEventName?: string; trialEventDivision?: string }>
 }
 
 // Helper to check if user is a tournament director for a tournament
@@ -55,7 +55,7 @@ export default async function TDNewTestPage({ searchParams }: Props) {
     redirect('/td')
   }
 
-  const { eventId, tournamentId } = await searchParams
+  const { eventId, tournamentId, trialEventName, trialEventDivision } = await searchParams
 
   if (!tournamentId) {
     redirect('/td')
@@ -93,6 +93,9 @@ export default async function TDNewTestPage({ searchParams }: Props) {
       },
     })
   }
+  
+  // For trial events, use the provided name and division
+  const eventName = event?.name || trialEventName || undefined
 
   // For TD test creation, we need to either:
   // 1. Create a temporary staff membership, or
@@ -177,7 +180,7 @@ export default async function TDNewTestPage({ searchParams }: Props) {
       tournamentName={tournament.name}
       tournamentDivision={tournament.division}
       eventId={event?.id}
-      eventName={event?.name}
+      eventName={eventName}
     />
   )
 }

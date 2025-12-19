@@ -149,6 +149,7 @@ export default async function TournamentManagePage({ params }: Props) {
     otherDiscounts: request.tournament.otherDiscounts,
     eligibilityRequirements: request.tournament.eligibilityRequirements,
     eventsRun: request.tournament.eventsRun,
+    trialEvents: request.tournament.trialEvents,
     level: request.tournamentLevel || null,
     published: request.tournament.published,
   }
@@ -157,6 +158,7 @@ export default async function TournamentManagePage({ params }: Props) {
     ...s,
     invitedAt: s.invitedAt.toISOString(),
     acceptedAt: s.acceptedAt?.toISOString() || null,
+    trialEvents: s.trialEvents,
   }))
 
   const serializedTimeline = timeline.map(t => ({

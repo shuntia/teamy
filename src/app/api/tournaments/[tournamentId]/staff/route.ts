@@ -101,6 +101,7 @@ export async function POST(
       name?: string
       role: 'EVENT_SUPERVISOR' | 'TOURNAMENT_DIRECTOR'
       eventIds?: string[]
+      trialEventNames?: string[]
     }
 
     if (!email || !role) {
@@ -153,13 +154,16 @@ export async function POST(
         name,
         role,
         inviteToken,
-        events: role === 'EVENT_SUPERVISOR' && eventIds.length > 0
+        events: role === 'EVENT_SUPERVISOR' && eventIds && eventIds.length > 0
           ? {
               create: eventIds.map((eventId: string) => ({
                 eventId,
               })),
             }
           : undefined,
+        trialEvents: role === 'EVENT_SUPERVISOR' && trialEventNames && trialEventNames.length > 0
+          ? JSON.stringify(trialEventNames)
+          : null,
       },
       include: {
         events: {
@@ -175,8 +179,10 @@ export async function POST(
       },
     })
 
-    // Get event names for email
+    // Get event names for email (including trial events)
     const eventNames = staff.events.map(e => e.event.name)
+    const trialEventNames = staff.trialEvents ? JSON.parse(staff.trialEvents) as string[] : []
+    const allEventNames = [...eventNames, ...trialEventNames]
 
     // Send invitation email
     await sendStaffInviteEmail({
@@ -186,7 +192,7 @@ export async function POST(
       role,
       inviteToken,
       inviterName: session.user.name || 'Tournament Director',
-      events: eventNames,
+      events: allEventNames,
     })
 
     return NextResponse.json({ staff })
@@ -260,10 +266,11 @@ export async function PATCH(
 
     const { tournamentId } = await params
     const body = await request.json()
-    const { staffId, role, eventIds } = body as {
+    const { staffId, role, eventIds, trialEventNames } = body as {
       staffId: string
       role?: 'EVENT_SUPERVISOR' | 'TOURNAMENT_DIRECTOR'
       eventIds?: string[]
+      trialEventNames?: string[]
     }
 
     if (!staffId) {
@@ -303,6 +310,7 @@ export async function PATCH(
 
     const nextRole = role
     const nextEventIds = role === 'EVENT_SUPERVISOR' ? eventIds || [] : []
+    const nextTrialEventNames = role === 'EVENT_SUPERVISOR' ? trialEventNames || [] : []
 
     const updatedStaff = await prisma.$transaction(async tx => {
       // Update role if provided
@@ -311,7 +319,14 @@ export async function PATCH(
         data: {
           ...(nextRole && { role: nextRole }),
           // Clear ES assignments when role changes away from ES
-          ...(nextRole && nextRole !== 'EVENT_SUPERVISOR' ? { events: { deleteMany: {} } } : {}),
+          ...(nextRole && nextRole !== 'EVENT_SUPERVISOR' ? { 
+            events: { deleteMany: {} },
+            trialEvents: null,
+          } : {}),
+          // Update trial events if role is EVENT_SUPERVISOR
+          ...(nextRole === 'EVENT_SUPERVISOR' ? {
+            trialEvents: nextTrialEventNames.length > 0 ? JSON.stringify(nextTrialEventNames) : null,
+          } : {}),
         },
       })
 

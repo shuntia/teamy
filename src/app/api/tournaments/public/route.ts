@@ -10,9 +10,8 @@ export async function GET(req: NextRequest) {
 
     const where: any = {
       approved: true,
-      startTime: {
-        gt: new Date(), // Only upcoming tournaments
-      },
+      published: true, // Only show published tournaments
+      // Show all tournaments (past and upcoming)
     }
 
     if (division) {
@@ -25,6 +24,11 @@ export async function GET(req: NextRequest) {
         hostingRequest: {
           select: {
             division: true,
+            tournamentLevel: true,
+            tournamentFormat: true,
+            directorName: true,
+            directorEmail: true,
+            preferredSlug: true,
           },
         },
         _count: {
@@ -34,9 +38,9 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: {
-        startDate: 'asc',
+        startDate: 'desc', // Show most recent first
       },
-      take: 50, // Limit to 50 tournaments
+      // No limit - show all tournaments
     })
 
     // Use hosting request division for display if available (supports "B&C")
