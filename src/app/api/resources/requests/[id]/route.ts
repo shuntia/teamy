@@ -16,7 +16,7 @@ export async function PATCH(
 
     const { id } = await params
     const body = await req.json()
-    const { action, rejectionReason } = body
+    const { action, rejectionReason, editedName, editedTag, editedUrl } = body
 
     if (!['approve', 'reject'].includes(action)) {
       return NextResponse.json(
@@ -41,6 +41,11 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
+      // Use edited values if provided, otherwise fall back to original values
+      const finalName = editedName || request.name
+      const finalTag = editedTag || request.tag
+      const finalUrl = editedUrl !== undefined ? editedUrl : request.url
+
       // Find the existing CLUB-scoped resource that was created when the request was submitted
       const existingResource = await prisma.resource.findFirst({
         where: {
@@ -52,21 +57,27 @@ export async function PATCH(
       })
 
       if (existingResource) {
-        // Upgrade the existing resource to PUBLIC scope
+        // Upgrade the existing resource to PUBLIC scope with edited values
         await prisma.$transaction(async (tx) => {
-          // Update the resource to PUBLIC
+          // Update the resource to PUBLIC with edited values
           await tx.resource.update({
             where: { id: existingResource.id },
             data: {
+              name: finalName,
+              tag: finalTag,
+              url: finalUrl,
               scope: 'PUBLIC',
               clubId: null, // Public resources are not tied to a specific club
             },
           })
 
-          // Update the request status
+          // Update the request status and store edited values
           await tx.resourceRequest.update({
             where: { id },
             data: {
+              name: finalName,
+              tag: finalTag,
+              url: finalUrl,
               status: 'APPROVED',
               reviewedAt: new Date(),
             },
@@ -78,9 +89,9 @@ export async function PATCH(
         await prisma.$transaction(async (tx) => {
           await tx.resource.create({
             data: {
-              name: request.name,
-              tag: request.tag,
-              url: request.url,
+              name: finalName,
+              tag: finalTag,
+              url: finalUrl,
               category: request.category,
               scope: 'PUBLIC',
               clubId: null,
@@ -90,6 +101,9 @@ export async function PATCH(
           await tx.resourceRequest.update({
             where: { id },
             data: {
+              name: finalName,
+              tag: finalTag,
+              url: finalUrl,
               status: 'APPROVED',
               reviewedAt: new Date(),
             },
@@ -167,21 +181,40 @@ export async function DELETE(
       return NextResponse.json({ error: 'Resource request not found' }, { status: 404 })
     }
 
-    // Also delete the associated CLUB-scoped resource if it exists
+    // Delete the associated resource based on the request status
     await prisma.$transaction(async (tx) => {
-      const existingResource = await tx.resource.findFirst({
-        where: {
-          name: request.name,
-          category: request.category,
-          clubId: request.clubId,
-          scope: 'CLUB',
-        },
-      })
-
-      if (existingResource) {
-        await tx.resource.delete({
-          where: { id: existingResource.id },
+      if (request.status === 'APPROVED') {
+        // If approved, the resource was upgraded to PUBLIC scope with clubId=null
+        const publicResource = await tx.resource.findFirst({
+          where: {
+            name: request.name,
+            tag: request.tag,
+            category: request.category,
+            scope: 'PUBLIC',
+          },
         })
+
+        if (publicResource) {
+          await tx.resource.delete({
+            where: { id: publicResource.id },
+          })
+        }
+      } else {
+        // If pending or rejected, look for CLUB-scoped resource
+        const clubResource = await tx.resource.findFirst({
+          where: {
+            name: request.name,
+            category: request.category,
+            clubId: request.clubId,
+            scope: 'CLUB',
+          },
+        })
+
+        if (clubResource) {
+          await tx.resource.delete({
+            where: { id: clubResource.id },
+          })
+        }
       }
 
       await tx.resourceRequest.delete({

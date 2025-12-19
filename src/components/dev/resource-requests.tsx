@@ -99,6 +99,11 @@ export function ResourceRequests() {
   const { toast } = useToast()
 
   const [allRequests, setAllRequests] = useState<ResourceRequest[]>([])
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false)
+  const [requestToApprove, setRequestToApprove] = useState<ResourceRequest | null>(null)
+  const [editedName, setEditedName] = useState('')
+  const [editedTag, setEditedTag] = useState('')
+  const [editedUrl, setEditedUrl] = useState('')
 
   const fetchRequests = useCallback(async () => {
     setLoading(true)
@@ -151,17 +156,43 @@ export function ResourceRequests() {
     )
   })
 
-  const handleApprove = async (request: ResourceRequest) => {
-    setActionLoading(request.id)
+  const openApproveDialog = (request: ResourceRequest) => {
+    setRequestToApprove(request)
+    setEditedName(request.name)
+    setEditedTag(request.tag)
+    setEditedUrl(request.url || '')
+    setApproveDialogOpen(true)
+  }
+
+  const handleApprove = async () => {
+    if (!requestToApprove) return
+
+    if (!editedName.trim() || !editedTag.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Name and tag are required',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setActionLoading(requestToApprove.id)
     try {
-      const response = await fetch(`/api/resources/requests/${request.id}`, {
+      const response = await fetch(`/api/resources/requests/${requestToApprove.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve' }),
+        body: JSON.stringify({ 
+          action: 'approve',
+          editedName: editedName.trim(),
+          editedTag: editedTag.trim(),
+          editedUrl: editedUrl.trim() || null,
+        }),
       })
 
       if (response.ok) {
         await fetchRequests()
+        setApproveDialogOpen(false)
+        setRequestToApprove(null)
         toast({
           title: 'Success',
           description: 'Resource request approved and added to public resources',
@@ -415,7 +446,7 @@ export function ResourceRequests() {
                           <>
                             <Button
                               size="sm"
-                              onClick={() => handleApprove(req)}
+                              onClick={() => openApproveDialog(req)}
                               disabled={actionLoading === req.id}
                             >
                               <CheckCircle2 className="h-4 w-4 mr-1" />
@@ -541,6 +572,84 @@ export function ResourceRequests() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : null}
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve Dialog */}
+      <Dialog open={approveDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setApproveDialogOpen(false)
+          setRequestToApprove(null)
+        }
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Approve Resource</DialogTitle>
+            <DialogDescription>
+              Review and edit the resource details before making it public.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name *</Label>
+              <Input
+                id="edit-name"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                placeholder="Resource name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-tag">Tag *</Label>
+              <Input
+                id="edit-tag"
+                value={editedTag}
+                onChange={(e) => setEditedTag(e.target.value)}
+                placeholder="Resource tag (e.g., 2024, Practice)"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-url">URL</Label>
+              <Input
+                id="edit-url"
+                value={editedUrl}
+                onChange={(e) => setEditedUrl(e.target.value)}
+                placeholder="https://..."
+                type="url"
+              />
+            </div>
+            {requestToApprove && (
+              <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <FolderOpen className="h-4 w-4" />
+                  <span>Category: {requestToApprove.category}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Building2 className="h-4 w-4" />
+                  <span>From: {requestToApprove.club.name}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setApproveDialogOpen(false)
+              setRequestToApprove(null)
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleApprove}
+              disabled={actionLoading === requestToApprove?.id || !editedName.trim() || !editedTag.trim()}
+            >
+              {actionLoading === requestToApprove?.id ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}
+              Approve & Make Public
             </Button>
           </DialogFooter>
         </DialogContent>
