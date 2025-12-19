@@ -25,7 +25,6 @@ import {
   Search,
   RefreshCw,
   Loader2,
-  Trash2,
   Mail,
   User,
   Building2,
@@ -103,8 +102,6 @@ export function ResourceRequests() {
   const [selectedRequest, setSelectedRequest] = useState<ResourceRequest | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [requestToDelete, setRequestToDelete] = useState<ResourceRequest | null>(null)
   const { toast } = useToast()
 
   const [allRequests, setAllRequests] = useState<ResourceRequest[]>([])
@@ -266,42 +263,6 @@ export function ResourceRequests() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to reject request',
-        variant: 'destructive',
-      })
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const handleDelete = async () => {
-    if (!requestToDelete) return
-
-    setActionLoading(requestToDelete.id)
-    try {
-      const response = await fetch(`/api/resources/requests/${requestToDelete.id}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        await fetchRequests()
-        setDeleteDialogOpen(false)
-        setRequestToDelete(null)
-        toast({
-          title: 'Success',
-          description: 'Resource request deleted',
-        })
-      } else {
-        const errorData = await response.json()
-        toast({
-          title: 'Error',
-          description: errorData.error || 'Failed to delete request',
-          variant: 'destructive',
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete request',
         variant: 'destructive',
       })
     } finally {
@@ -523,17 +484,6 @@ export function ResourceRequests() {
                             Reset to Pending
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setRequestToDelete(req)
-                            setDeleteDialogOpen(true)
-                          }}
-                          disabled={actionLoading === req.id}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
                       </div>
                     </div>
                   </div>
@@ -586,34 +536,6 @@ export function ResourceRequests() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : null}
               Reject
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Request</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete the request for &quot;{requestToDelete?.name}&quot;?
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={actionLoading === requestToDelete?.id}
-            >
-              {actionLoading === requestToDelete?.id ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : null}
-              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

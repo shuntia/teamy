@@ -193,33 +193,15 @@ export async function PATCH(
         )
       }
 
-      // When rejecting, also delete the CLUB-scoped resource
-      await prisma.$transaction(async (tx) => {
-        // Find and delete the CLUB-scoped resource
-        const existingResource = await tx.resource.findFirst({
-          where: {
-            name: request.name,
-            category: request.category,
-            clubId: request.clubId,
-            scope: 'CLUB',
-          },
-        })
-
-        if (existingResource) {
-          await tx.resource.delete({
-            where: { id: existingResource.id },
-          })
-        }
-
-        // Update the request status
-        await tx.resourceRequest.update({
-          where: { id },
-          data: {
-            status: 'REJECTED',
-            rejectionReason,
-            reviewedAt: new Date(),
-          },
-        })
+      // When rejecting, keep the CLUB-scoped resource so the club can still use it
+      // Only update the request status - the resource remains visible to the club
+      await prisma.resourceRequest.update({
+        where: { id },
+        data: {
+          status: 'REJECTED',
+          rejectionReason,
+          reviewedAt: new Date(),
+        },
       })
 
       return NextResponse.json({ success: true, message: 'Resource request rejected' })
