@@ -70,8 +70,13 @@ export default async function TournamentPage({ params }: Props) {
       userClubs = Array.from(uniqueClubs.values())
     }
 
+    // Tournament accessed by ID must have a hosting request to be valid
+    if (!tournamentById.hostingRequest) {
+      notFound()
+    }
+
     // Check if user is the tournament director
-    const isDirector = session?.user?.email?.toLowerCase() === tournamentById.hostingRequest?.directorEmail?.toLowerCase()
+    const isDirector = session?.user?.email?.toLowerCase() === tournamentById.hostingRequest.directorEmail.toLowerCase()
 
     // Check if tournament is published (or user is director)
     if (!tournamentById.published && !isDirector) {
@@ -79,7 +84,7 @@ export default async function TournamentPage({ params }: Props) {
     }
 
     // Use hosting request division for display (supports "B&C")
-    const displayDivision = tournamentById.hostingRequest?.division || tournamentById.division || 'C'
+    const displayDivision = tournamentById.hostingRequest.division || tournamentById.division || 'C'
     const serializedTournament = {
       id: tournamentById.id,
       name: tournamentById.name,
