@@ -400,7 +400,7 @@ export function TournamentPageClient({ hostingRequest, tournament, isDirector, u
                 </Button>
               </Link>
             ) : (
-              <Link href="/login">
+              <Link href={`/login?callbackUrl=${encodeURIComponent(`/tournaments/${hostingRequest.preferredSlug || tournament?.slug || tournament?.id || hostingRequest.id}`)}`}>
                 <Button variant="ghost" size="sm" className="text-white hover:bg-white/10">
                   Sign In
                 </Button>

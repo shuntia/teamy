@@ -52,10 +52,9 @@ export function HomeTabs() {
   }
 
   const handleSignUp = (tournamentId: string) => {
-    // Check if user is signed in by trying to access a protected route
-    // If not signed in, redirect to login with callback
-    const callbackUrl = `/tournaments/${tournamentId}`
-    router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
+    // Open tournament page in new tab - viewing doesn't require login
+    // Users can register from the tournament page (which handles login if needed)
+    window.open(`/tournaments/${tournamentId}`, '_blank')
   }
 
   const formatDate = (dateString: string) => {

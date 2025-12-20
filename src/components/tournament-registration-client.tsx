@@ -230,7 +230,7 @@ export function TournamentRegistrationClient({
                 </Button>
               </Link>
             ) : (
-              <Link href="/login">
+              <Link href={`/login?callbackUrl=${encodeURIComponent(`/tournaments/${tournamentSlug}/register`)}`}>
                 <Button variant="ghost" size="sm" className="text-white hover:bg-white/10">
                   Sign In
                 </Button>
@@ -620,7 +620,7 @@ export function TournamentRegistrationClient({
                     <p className="text-sm text-muted-foreground">
                       Sign in to register your team for this tournament.
                     </p>
-                    <Link href="/login">
+                    <Link href={`/login?callbackUrl=${encodeURIComponent(`/tournaments/${tournamentSlug}/register`)}`}>
                       <Button className="w-full gap-2">
                         <User className="h-4 w-4" />
                         Sign In to Register

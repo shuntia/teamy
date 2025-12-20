@@ -227,14 +227,8 @@ export function HostingTournamentsPage({ isLoggedIn = false }: HostingTournament
 
   const handleTournamentClick = (tournament: Tournament) => {
     const slug = getTournamentSlug(tournament)
-    if (!isLoggedIn) {
-      // Redirect to login with callback URL
-      const callbackUrl = `/tournaments/${slug}`
-      router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
-    } else {
-      // User is logged in, go directly to tournament
-      router.push(`/tournaments/${slug}`)
-    }
+    // Open tournament page in new tab - no login required for viewing
+    window.open(`/tournaments/${slug}`, '_blank')
   }
 
   // Helper function to highlight search keywords in text
