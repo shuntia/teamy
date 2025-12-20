@@ -955,16 +955,7 @@ function AIAssistantPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-16rem)] max-h-[700px]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <Bot className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="font-semibold">Science Olympiad Assistant</h3>
-            <p className="text-xs text-muted-foreground">Ask about events, rules, and study strategies</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end mb-4 flex-shrink-0">
         {messages.length > 0 && (
           <Button variant="outline" size="sm" onClick={clearChat}>
             <Trash2 className="h-4 w-4 mr-2" />
@@ -1634,10 +1625,6 @@ function ResourcesSection({ clubId, currentMembershipId, isAdmin }: { clubId: st
                             placeholder="https://example.com"
                             className="h-8 text-sm"
                           />
-                        </div>
-                        <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs text-blue-600 dark:text-blue-400 flex items-start gap-2">
-                          <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                          <span>Your resource will be visible to your club immediately. It will become available to everyone once approved.</span>
                         </div>
                         <Button
                           size="sm"

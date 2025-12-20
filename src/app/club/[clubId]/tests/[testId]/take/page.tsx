@@ -84,7 +84,7 @@ export default async function TakeTestPage({
     },
   })
 
-  let membership
+  let membership: any
   let isAdminUser = false
   let hasAccess = false
 
