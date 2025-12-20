@@ -333,7 +333,7 @@ export async function POST(
     // Check assignment (admins bypass this check, tournament tests bypass this check)
     if (!isAdminUser && !isTournamentTest) {
       const hasAccess = test.assignments.some(
-        (a) =>
+        (a: any) =>
           a.assignedScope === 'CLUB' ||
           (a.teamId && membership.teamId && a.teamId === membership.teamId) ||
           a.targetMembershipId === membership.id ||
