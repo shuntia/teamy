@@ -27,6 +27,8 @@ GENERAL OUTPUT RULES (STRICT)
 5. Never merge separate questions.
 6. Never skip a line that clearly functions as a question.
 7. NEVER create FRQ parts (frqParts) unless there is an explicit [SUBQ] marker.
+8. If a question has context sentence(s) immediately before it, include them in the question text.
+9. If there is a number followed by a period, always explicitly check to see if it is followed by a question or prompt.
 
 ==============================================================
 IMPORTED QUESTION SCHEMA (MANDATORY)
