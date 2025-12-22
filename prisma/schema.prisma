@@ -14,6 +14,11 @@ model User {
   image                   String?
   emailVerified           DateTime?
   preferences             Json?                    // User-level preferences including background settings
+  subscriptionStatus      String?                  // 'active', 'canceled', 'past_due', etc.
+  subscriptionType        String?                  // 'pro', 'boost', etc.
+  stripeCustomerId        String?                  @unique
+  stripeSubscriptionId    String?                  @unique
+  subscriptionEndsAt      DateTime?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   accounts                Account[]
