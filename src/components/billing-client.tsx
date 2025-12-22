@@ -1,12 +1,14 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import { AppHeader } from '@/components/app-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Check, Zap, Crown, CreditCard, ArrowLeft } from 'lucide-react'
+import { Check, Zap, Crown, CreditCard, ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { useToast } from '@/components/ui/use-toast'
 
 interface BillingClientProps {
   user: {
@@ -19,6 +21,9 @@ interface BillingClientProps {
     id: string
     name: string
   }[]
+  subscriptionStatus?: string | null
+  subscriptionType?: string | null
+  subscriptionEndsAt?: Date | null
 }
 
 const proFeatures = [
@@ -36,12 +41,123 @@ const boostTiers = [
   { boosts: '10 boosts', tier: 'Tier 3', features: ['Unlimited members', 'Unlimited storage'] },
 ]
 
-export function BillingClient({ user, clubs }: BillingClientProps) {
+// Stripe Pro Plan Price ID - Get this from Stripe Dashboard after creating the product
+// Can be set via environment variable or hardcoded here
+const PRO_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || 'price_1234567890' // TODO: Replace with actual Stripe Price ID
+
+export function BillingClient({ user, clubs, subscriptionStatus, subscriptionType, subscriptionEndsAt }: BillingClientProps) {
+  const isPro = subscriptionStatus === 'active' && subscriptionType === 'pro'
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
   
   // Determine back destination based on where user came from
   const from = searchParams.get('from')
   const backHref = from === 'tournaments' ? '/dashboard/tournaments' : '/dashboard/club'
+  
+  // Check for success/cancel messages and verify subscription
+  useEffect(() => {
+    const success = searchParams.get('success')
+    const canceled = searchParams.get('canceled')
+    const sessionId = searchParams.get('session_id')
+    
+    if (success === 'true' && sessionId) {
+      // Verify subscription with Stripe
+      setIsLoading(true)
+      fetch('/api/stripe/verify-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sessionId }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            toast({
+              title: 'Payment successful!',
+              description: 'Your Pro subscription is now active.',
+            })
+            // Reload the page to show updated subscription status
+            router.refresh()
+          } else {
+            toast({
+              title: 'Payment successful',
+              description: 'Your payment was processed. Subscription status will update shortly.',
+            })
+          }
+        })
+        .catch((error) => {
+          console.error('Error verifying subscription:', error)
+          toast({
+            title: 'Payment successful',
+            description: 'Your payment was processed. Subscription status will update shortly.',
+          })
+        })
+        .finally(() => {
+          setIsLoading(false)
+          // Clean up URL
+          router.replace('/dashboard/billing')
+        })
+    } else if (success === 'true') {
+      toast({
+        title: 'Payment successful!',
+        description: 'Your Pro subscription is now active.',
+      })
+      router.refresh()
+      router.replace('/dashboard/billing')
+    } else if (canceled === 'true') {
+      toast({
+        title: 'Payment canceled',
+        description: 'Your payment was canceled. You can try again anytime.',
+        variant: 'destructive',
+      })
+      // Clean up URL
+      router.replace('/dashboard/billing')
+    }
+  }, [searchParams, router, toast])
+  
+  const handleUpgradeToPro = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          priceId: PRO_PRICE_ID,
+          type: 'pro',
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        // Show detailed error message if available
+        const errorMessage = data.message 
+          ? `${data.error}: ${data.message}` 
+          : data.error || 'Failed to create checkout session'
+        throw new Error(errorMessage)
+      }
+      
+      // Redirect to Stripe Checkout
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        throw new Error('No checkout URL received')
+      }
+    } catch (error) {
+      console.error('Checkout error:', error)
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to start checkout process',
+        variant: 'destructive',
+      })
+      setIsLoading(false)
+    }
+  }
   
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 grid-pattern">
@@ -61,18 +177,37 @@ export function BillingClient({ user, clubs }: BillingClientProps) {
         </div>
 
         {/* Current Plan */}
-        <Card className="mb-8">
+        <Card className={`mb-8 ${isPro ? 'border-teamy-primary/50 bg-teamy-primary/5' : ''}`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5" />
               Current Plan
             </CardTitle>
-            <CardDescription>You are currently on the Free plan</CardDescription>
+            <CardDescription>
+              {isPro ? 'You are currently on the Pro plan' : 'You are currently on the Free plan'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
-              <Badge variant="secondary" className="text-lg px-4 py-2">Free</Badge>
-              <span className="text-muted-foreground">Basic features included</span>
+              {isPro ? (
+                <>
+                  <Badge className="text-lg px-4 py-2 bg-teamy-primary text-white">
+                    <Crown className="h-4 w-4 mr-1 inline" />
+                    Pro
+                  </Badge>
+                  <span className="text-foreground font-medium">All premium features unlocked</span>
+                  {subscriptionEndsAt && (
+                    <span className="text-sm text-muted-foreground ml-auto">
+                      Renews {new Date(subscriptionEndsAt).toLocaleDateString()}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Badge variant="secondary" className="text-lg px-4 py-2">Free</Badge>
+                  <span className="text-muted-foreground">Basic features included</span>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -103,16 +238,42 @@ export function BillingClient({ user, clubs }: BillingClientProps) {
                 </ul>
               </div>
               <div className="flex flex-col justify-center">
-                <Button 
-                  size="lg" 
-                  className="w-full bg-teamy-primary hover:bg-teamy-primary-dark text-white"
-                  disabled
-                >
-                  Coming Soon
-                </Button>
-                <p className="text-sm text-muted-foreground text-center mt-2">
-                  Payment integration coming soon
-                </p>
+                {isPro ? (
+                  <>
+                    <Button 
+                      size="lg" 
+                      className="w-full bg-teamy-primary hover:bg-teamy-primary-dark text-white"
+                      disabled
+                    >
+                      <Crown className="mr-2 h-4 w-4" />
+                      Pro Active
+                    </Button>
+                    <p className="text-sm text-muted-foreground text-center mt-2">
+                      Thank you for being a Pro member!
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Button 
+                      size="lg" 
+                      className="w-full bg-teamy-primary hover:bg-teamy-primary-dark text-white"
+                      onClick={handleUpgradeToPro}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Redirecting to Stripe...
+                        </>
+                      ) : (
+                        'Upgrade to Pro'
+                      )}
+                    </Button>
+                    <p className="text-sm text-muted-foreground text-center mt-2">
+                      Secure payment powered by Stripe
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
