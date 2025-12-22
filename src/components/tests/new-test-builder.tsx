@@ -1030,14 +1030,15 @@ export function NewTestBuilder({
           // Build questions array for ES API
           // Include startAt/endAt if they exist in publishFormData (when publishing) or test data (when updating)
           const testWithDates = test as any
+          const publishFormDataWithDates = publishFormData as any
           const startAtISO = andPublish && publishFormData.startAt 
             ? new Date(publishFormData.startAt).toISOString() 
             : (testWithDates.startAt ? new Date(testWithDates.startAt).toISOString() : undefined)
           const endAtISO = andPublish && publishFormData.endAt 
             ? new Date(publishFormData.endAt).toISOString() 
             : (testWithDates.endAt ? new Date(testWithDates.endAt).toISOString() : undefined)
-          const allowLateUntilISO = andPublish && publishFormData.allowLateUntil && publishFormData.allowLateUntil.trim()
-            ? new Date(publishFormData.allowLateUntil).toISOString()
+          const allowLateUntilISO = andPublish && publishFormDataWithDates.allowLateUntil && publishFormDataWithDates.allowLateUntil.trim()
+            ? new Date(publishFormDataWithDates.allowLateUntil).toISOString()
             : (testWithDates.allowLateUntil ? new Date(testWithDates.allowLateUntil).toISOString() : undefined)
 
           updatePayload = {
