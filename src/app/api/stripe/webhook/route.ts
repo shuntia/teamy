@@ -98,8 +98,9 @@ export async function POST(req: NextRequest) {
               }
 
               // Only set subscriptionEndsAt if current_period_end exists and is valid
-              if (subscription.current_period_end && typeof subscription.current_period_end === 'number') {
-                updateData.subscriptionEndsAt = new Date(subscription.current_period_end * 1000)
+              const currentPeriodEnd = (subscription as any).current_period_end
+              if (currentPeriodEnd && typeof currentPeriodEnd === 'number') {
+                updateData.subscriptionEndsAt = new Date(currentPeriodEnd * 1000)
               }
               
               await prisma.user.update({
@@ -132,8 +133,9 @@ export async function POST(req: NextRequest) {
           }
 
           // Only set subscriptionEndsAt if current_period_end exists and is valid
-          if (subscription.current_period_end && typeof subscription.current_period_end === 'number') {
-            updateData.subscriptionEndsAt = new Date(subscription.current_period_end * 1000)
+          const currentPeriodEnd = (subscription as any).current_period_end
+          if (currentPeriodEnd && typeof currentPeriodEnd === 'number') {
+            updateData.subscriptionEndsAt = new Date(currentPeriodEnd * 1000)
           }
 
           await prisma.user.update({
@@ -161,8 +163,9 @@ export async function POST(req: NextRequest) {
           }
 
           // Only set subscriptionEndsAt if current_period_end exists and is valid
-          if (subscription.current_period_end && typeof subscription.current_period_end === 'number') {
-            updateData.subscriptionEndsAt = new Date(subscription.current_period_end * 1000)
+          const currentPeriodEnd = (subscription as any).current_period_end
+          if (currentPeriodEnd && typeof currentPeriodEnd === 'number') {
+            updateData.subscriptionEndsAt = new Date(currentPeriodEnd * 1000)
           }
 
           await prisma.user.update({
