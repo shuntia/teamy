@@ -73,10 +73,10 @@ export default async function BlogPostPage({ params }: Props) {
 
           {/* Header */}
           <header className="mb-12">
-            <h1 className="font-heading text-3xl md:text-4xl font-bold text-foreground mb-6">
+            <h1 className="font-heading text-3xl md:text-4xl font-bold text-foreground mb-6 bg-transparent">
               {post.title}
             </h1>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground bg-transparent">
               <span className="flex items-center gap-1.5">
                 <User className="h-4 w-4" />
                 {post.authorName}
