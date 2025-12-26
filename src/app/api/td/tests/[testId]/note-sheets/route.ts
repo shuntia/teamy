@@ -52,6 +52,7 @@ export async function GET(
     })
 
     let tournamentId: string | null = null
+    let isESTest = false
 
     if (test) {
       // Find tournament via TournamentTest
@@ -74,12 +75,11 @@ export async function GET(
 
       if (esTest) {
         tournamentId = esTest.tournamentId
-        // ESTest doesn't support note sheets in the database yet
-        return NextResponse.json({ noteSheets: [] })
+        isESTest = true
       }
     }
 
-    if (!test || !tournamentId) {
+    if (!tournamentId) {
       return NextResponse.json({ error: 'Test not found' }, { status: 404 })
     }
 
@@ -92,11 +92,11 @@ export async function GET(
       )
     }
 
-    // Get all note sheets for this test
+    // Get all note sheets for this test (handle both Test and ESTest)
     const noteSheets = await prisma.noteSheet.findMany({
-      where: {
-        testId: testId,
-      },
+      where: isESTest
+        ? { esTestId: testId }
+        : { testId: testId },
       include: {
         membership: {
           include: {

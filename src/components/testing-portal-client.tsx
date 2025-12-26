@@ -125,7 +125,7 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
   const [editUsernameOpen, setEditUsernameOpen] = useState(false)
   const [currentUserName, setCurrentUserName] = useState(user.name ?? null)
   // Track note sheet status for each test: Map<testId, { status: string | null, hasNoteSheet: boolean }>
-  const [noteSheetStatuses, setNoteSheetStatuses] = useState<Map<string, { status: string | null, hasNoteSheet: boolean }>>(new Map())
+  const [noteSheetStatuses, setNoteSheetStatuses] = useState<Map<string, { status: string | null, hasNoteSheet: boolean, rejectionReason: string | null }>>(new Map())
   const [noteSheetUploadOpen, setNoteSheetUploadOpen] = useState<string | null>(null)
 
   // Load tournaments
@@ -197,7 +197,7 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
   }
 
   const loadNoteSheetStatuses = async (tournaments: Tournament[]) => {
-    const statusMap = new Map<string, { status: string | null, hasNoteSheet: boolean }>()
+    const statusMap = new Map<string, { status: string | null, hasNoteSheet: boolean, rejectionReason: string | null }>()
     
     // Collect all test IDs that allow note sheets
     const testIds: string[] = []
@@ -226,17 +226,20 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
             statusMap.set(testId, {
               status: data.noteSheet.status,
               hasNoteSheet: true,
+              rejectionReason: data.noteSheet.rejectionReason || null,
             })
           } else {
             statusMap.set(testId, {
               status: null,
               hasNoteSheet: false,
+              rejectionReason: null,
             })
           }
         } else {
           statusMap.set(testId, {
             status: null,
             hasNoteSheet: false,
+            rejectionReason: null,
           })
         }
       } catch (error) {
@@ -244,6 +247,7 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
         statusMap.set(testId, {
           status: null,
           hasNoteSheet: false,
+          rejectionReason: null,
         })
       }
     })
@@ -719,9 +723,21 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
                                                         <div className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">
                                                           Note Sheet Rejected
                                                         </div>
-                                                        <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-300">
-                                                          <XCircle className="h-4 w-4" />
-                                                          <span>Your note sheet was rejected. Please upload a new one.</span>
+                                                        <div className="space-y-2">
+                                                          <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-300">
+                                                            <XCircle className="h-4 w-4" />
+                                                            <span>Your note sheet was rejected. Please upload a new one.</span>
+                                                          </div>
+                                                          {noteSheetStatus.rejectionReason && noteSheetStatus.rejectionReason.trim() && (
+                                                            <div className="mt-2 p-3 bg-white dark:bg-red-950/40 rounded border-2 border-red-300 dark:border-red-700">
+                                                              <p className="text-xs font-semibold text-red-900 dark:text-red-100 mb-1.5 uppercase tracking-wide">
+                                                                Admin Comments:
+                                                              </p>
+                                                              <p className="text-sm text-red-900 dark:text-red-100 whitespace-pre-wrap leading-relaxed">
+                                                                {noteSheetStatus.rejectionReason}
+                                                              </p>
+                                                            </div>
+                                                          )}
                                                         </div>
                                                       </>
                                                     )
@@ -1032,9 +1048,21 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
                                                 <div className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">
                                                   Note Sheet Rejected
                                                 </div>
-                                                <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-300">
-                                                  <XCircle className="h-4 w-4" />
-                                                  <span>Your note sheet was rejected. Please upload a new one.</span>
+                                                <div className="space-y-2">
+                                                  <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-300">
+                                                    <XCircle className="h-4 w-4" />
+                                                    <span>Your note sheet was rejected. Please upload a new one.</span>
+                                                  </div>
+                                                  {noteSheetStatus.rejectionReason && noteSheetStatus.rejectionReason.trim() && (
+                                                    <div className="mt-2 p-3 bg-white dark:bg-red-950/40 rounded border-2 border-red-300 dark:border-red-700">
+                                                      <p className="text-xs font-semibold text-red-900 dark:text-red-100 mb-1.5 uppercase tracking-wide">
+                                                        Admin Comments:
+                                                      </p>
+                                                      <p className="text-sm text-red-900 dark:text-red-100 whitespace-pre-wrap leading-relaxed">
+                                                        {noteSheetStatus.rejectionReason}
+                                                      </p>
+                                                    </div>
+                                                  )}
                                                 </div>
                                               </>
                                             )

@@ -53,6 +53,11 @@ export async function PATCH(
       where: { id: noteSheetId },
       include: {
         test: true,
+        esTest: {
+          select: {
+            tournamentId: true,
+          },
+        },
       },
     })
 
@@ -60,22 +65,32 @@ export async function PATCH(
       return NextResponse.json({ error: 'Note sheet not found' }, { status: 404 })
     }
 
-    if (noteSheet.testId !== testId) {
+    // Check if note sheet belongs to this test (handle both Test and ESTest)
+    const belongsToTest = (noteSheet.testId === testId) || (noteSheet.esTestId === testId)
+    if (!belongsToTest) {
       return NextResponse.json(
         { error: 'Note sheet does not belong to this test' },
         { status: 400 }
       )
     }
 
-    // Find tournament via TournamentTest
-    const tournamentTest = await prisma.tournamentTest.findFirst({
-      where: { testId: noteSheet.testId },
-      select: {
-        tournamentId: true,
-      },
-    })
+    let tournamentId: string | null = null
 
-    if (!tournamentTest) {
+    if (noteSheet.testId) {
+      // Regular Test - find tournament via TournamentTest
+      const tournamentTest = await prisma.tournamentTest.findFirst({
+        where: { testId: noteSheet.testId },
+        select: {
+          tournamentId: true,
+        },
+      })
+      tournamentId = tournamentTest?.tournamentId || null
+    } else if (noteSheet.esTestId) {
+      // ESTest - get tournament directly
+      tournamentId = noteSheet.esTest?.tournamentId || null
+    }
+
+    if (!tournamentId) {
       return NextResponse.json(
         { error: 'Test is not associated with a tournament' },
         { status: 400 }
@@ -83,7 +98,7 @@ export async function PATCH(
     }
 
     // Check if user is tournament admin
-    const isAdmin = await isTournamentAdmin(session.user.id, tournamentTest.tournamentId)
+    const isAdmin = await isTournamentAdmin(session.user.id, tournamentId)
     if (!isAdmin) {
       return NextResponse.json(
         { error: 'Only tournament admins can review note sheets' },
@@ -92,13 +107,24 @@ export async function PATCH(
     }
 
     // Get reviewer's membership (for audit trail)
-    // Find a membership for the reviewer in the test's club
-    const reviewerMembership = await prisma.membership.findFirst({
-      where: {
-        userId: session.user.id,
-        clubId: noteSheet.test.clubId,
-      },
-    })
+    // For regular Test, find membership in the test's club
+    // For ESTest, we'll use the first membership we can find for the user
+    let reviewerMembership = null
+    if (noteSheet.testId && noteSheet.test) {
+      reviewerMembership = await prisma.membership.findFirst({
+        where: {
+          userId: session.user.id,
+          clubId: noteSheet.test.clubId,
+        },
+      })
+    } else {
+      // For ESTest, find any membership for the user (we just need it for audit trail)
+      reviewerMembership = await prisma.membership.findFirst({
+        where: {
+          userId: session.user.id,
+        },
+      })
+    }
 
     // Update the note sheet
     const updated = await prisma.noteSheet.update({

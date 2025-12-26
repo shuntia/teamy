@@ -655,13 +655,34 @@ export async function PUT(request: NextRequest) {
     if (durationMinutes && durationMinutes !== existingTest.durationMinutes) changedFields.push('durationMinutes')
     if (status && status !== existingTest.status) changedFields.push('status')
     if (eventId !== undefined && eventId !== existingTest.eventId) changedFields.push('eventId')
+    // Calculate new start/end times for validation and change tracking
+    const newStartAt = startAt !== undefined
+      ? (startAt ? new Date(startAt) : null)
+      : existingTest.startAt
+    const newEndAt = endAt !== undefined
+      ? (endAt ? new Date(endAt) : null)
+      : existingTest.endAt
+    
+    // Validate that end time is after start time if both are set
+    if (newStartAt && newEndAt && newEndAt <= newStartAt) {
+      return NextResponse.json(
+        { error: 'End time must be after start time' },
+        { status: 400 }
+      )
+    }
+    
+    // Track what fields are being changed for audit log
+    if (name && name !== existingTest.name) changedFields.push('name')
+    if (description !== undefined && description !== existingTest.description) changedFields.push('description')
+    if (instructions !== undefined && instructions !== existingTest.instructions) changedFields.push('instructions')
+    if (durationMinutes && durationMinutes !== existingTest.durationMinutes) changedFields.push('durationMinutes')
+    if (status && status !== existingTest.status) changedFields.push('status')
+    if (eventId !== undefined && eventId !== existingTest.eventId) changedFields.push('eventId')
     if (startAt !== undefined) {
-      const newStartAt = startAt ? new Date(startAt) : null
       const existingStartAt = existingTest.startAt
       if (newStartAt?.getTime() !== existingStartAt?.getTime()) changedFields.push('startAt')
     }
     if (endAt !== undefined) {
-      const newEndAt = endAt ? new Date(endAt) : null
       const existingEndAt = existingTest.endAt
       if (newEndAt?.getTime() !== existingEndAt?.getTime()) changedFields.push('endAt')
     }

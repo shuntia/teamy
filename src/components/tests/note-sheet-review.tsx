@@ -268,8 +268,18 @@ export function NoteSheetReview({
                       </div>
                     )}
 
-                    {noteSheet.status === 'PENDING' && (
+                    {/* Show review buttons for PENDING and auto-approved ACCEPTED statuses */}
+                    {/* For manually approved note sheets (reviewedAt is set), don't show buttons */}
+                    {(noteSheet.status === 'PENDING' || (noteSheet.status === 'ACCEPTED' && !noteSheet.reviewedAt)) && (
                       <div className="space-y-3 pt-2 border-t">
+                        {/* Only show auto-approval message if it was auto-approved (reviewedAt is null) */}
+                        {noteSheet.status === 'ACCEPTED' && !noteSheet.reviewedAt && (
+                          <div className="p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg mb-2">
+                            <p className="text-sm text-blue-900 dark:text-blue-100">
+                              This note sheet was auto-approved. You can still reject it if needed.
+                            </p>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <Button
                             size="sm"
@@ -286,40 +296,51 @@ export function NoteSheetReview({
                             }}
                             variant={reviewingId === noteSheet.id && reviewStatus === 'ACCEPTED' ? 'default' : 'outline'}
                             className="flex-1"
+                            disabled={noteSheet.status === 'ACCEPTED' && reviewingId !== noteSheet.id}
                           >
                             <CheckCircle2 className="h-4 w-4 mr-2" />
-                            {reviewingId === noteSheet.id && reviewStatus === 'ACCEPTED' ? 'Confirm Acceptance' : 'Accept'}
+                            {reviewingId === noteSheet.id && reviewStatus === 'ACCEPTED' 
+                              ? 'Confirm Acceptance' 
+                              : noteSheet.status === 'ACCEPTED'
+                              ? 'Already Accepted'
+                              : 'Accept'}
                           </Button>
-                          <Button
-                            size="sm"
-                            variant={reviewingId === noteSheet.id && reviewStatus === 'REJECTED' ? 'destructive' : 'outline'}
-                            onClick={() => {
-                              if (reviewingId === noteSheet.id && reviewStatus === 'REJECTED') {
-                                // If already selected and rejection reason is filled or empty, submit it
-                                handleReview(noteSheet.id)
-                              } else {
-                                // Otherwise, select it
-                                setReviewStatus('REJECTED')
-                                setReviewingId(noteSheet.id)
-                              }
-                            }}
-                            className="flex-1"
-                          >
-                            <XCircle className="h-4 w-4 mr-2" />
-                            {reviewingId === noteSheet.id && reviewStatus === 'REJECTED' ? 'Submit Rejection' : 'Reject'}
-                          </Button>
+                          {/* Only show reject button for PENDING or auto-approved (reviewedAt is null) */}
+                          {(noteSheet.status === 'PENDING' || (noteSheet.status === 'ACCEPTED' && !noteSheet.reviewedAt)) && (
+                            <Button
+                              size="sm"
+                              variant={reviewingId === noteSheet.id && reviewStatus === 'REJECTED' ? 'destructive' : 'outline'}
+                              onClick={() => {
+                                if (reviewingId === noteSheet.id && reviewStatus === 'REJECTED') {
+                                  // If already selected, submit it (rejection reason is optional)
+                                  handleReview(noteSheet.id)
+                                } else {
+                                  // Otherwise, select it
+                                  setReviewStatus('REJECTED')
+                                  setReviewingId(noteSheet.id)
+                                }
+                              }}
+                              className="flex-1"
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              {reviewingId === noteSheet.id && reviewStatus === 'REJECTED' ? 'Submit Rejection' : 'Reject'}
+                            </Button>
+                          )}
                         </div>
 
                         {reviewingId === noteSheet.id && reviewStatus === 'REJECTED' && (
                           <div className="space-y-2">
-                            <Label htmlFor="rejection-reason">Rejection Reason (Optional)</Label>
+                            <Label htmlFor="rejection-reason">Rejection Message (Optional)</Label>
                             <Textarea
                               id="rejection-reason"
                               value={rejectionReason}
                               onChange={(e) => setRejectionReason(e.target.value)}
-                              placeholder="Explain why this note sheet is being rejected (optional)..."
+                              placeholder="Add an optional message explaining why this note sheet is being rejected..."
                               rows={3}
                             />
+                            <p className="text-xs text-muted-foreground">
+                              This message is optional. If provided, it will be shown to the student.
+                            </p>
                           </div>
                         )}
                       </div>
