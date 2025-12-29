@@ -825,12 +825,17 @@ export async function GET(
 
         if (adminView) {
           // Admin view - get all note sheets for this ESTest
-          // Check if user is tournament admin
-          const { isTournamentAdmin } = await import('@/lib/rbac')
-          const isAdminUser = await isTournamentAdmin(session.user.id, esTest.tournamentId)
-          if (!isAdminUser) {
+          // Check if user is tournament staff
+          const tournamentStaff = await prisma.tournamentStaff.findFirst({
+            where: {
+              tournamentId: esTest.tournamentId,
+              userId: session.user.id,
+            },
+          })
+          
+          if (!tournamentStaff) {
             return NextResponse.json(
-              { error: 'Only tournament admins can view all note sheets' },
+              { error: 'Only tournament staff can view all note sheets' },
               { status: 403 }
             )
           }
