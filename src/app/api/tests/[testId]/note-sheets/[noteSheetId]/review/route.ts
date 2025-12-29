@@ -43,6 +43,10 @@ export async function PATCH(
       )
     }
 
+    if (!noteSheet.test) {
+      return NextResponse.json({ error: 'Test not found' }, { status: 404 })
+    }
+
     // Check if user is an admin
     const isAdminUser = await isAdmin(session.user.id, noteSheet.test.clubId)
     if (!isAdminUser) {

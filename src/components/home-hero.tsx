@@ -37,7 +37,7 @@ export function HomeHero({ isLoggedIn }: HomeHeroProps) {
                   text={[
                     "team communication",
                     "colaborating together",
-                    "organizing events",
+                    "staying organized",
                     "achieving excellence",
                   ]}
                   speed={60}
