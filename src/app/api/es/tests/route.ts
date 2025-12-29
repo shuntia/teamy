@@ -647,14 +647,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Could not determine staff member' }, { status: 400 })
     }
 
-    // Track what fields are being changed for audit log
-    const changedFields: string[] = []
-    if (name && name !== existingTest.name) changedFields.push('name')
-    if (description !== undefined && description !== existingTest.description) changedFields.push('description')
-    if (instructions !== undefined && instructions !== existingTest.instructions) changedFields.push('instructions')
-    if (durationMinutes && durationMinutes !== existingTest.durationMinutes) changedFields.push('durationMinutes')
-    if (status && status !== existingTest.status) changedFields.push('status')
-    if (eventId !== undefined && eventId !== existingTest.eventId) changedFields.push('eventId')
     // Calculate new start/end times for validation and change tracking
     const newStartAt = startAt !== undefined
       ? (startAt ? new Date(startAt) : null)
@@ -672,6 +664,7 @@ export async function PUT(request: NextRequest) {
     }
     
     // Track what fields are being changed for audit log
+    const changedFields: string[] = []
     if (name && name !== existingTest.name) changedFields.push('name')
     if (description !== undefined && description !== existingTest.description) changedFields.push('description')
     if (instructions !== undefined && instructions !== existingTest.instructions) changedFields.push('instructions')
@@ -711,8 +704,8 @@ export async function PUT(request: NextRequest) {
           ...(durationMinutes && { durationMinutes }),
           ...(status && { status }),
           ...(eventId !== undefined && { eventId }),
-          ...(startAt !== undefined && { startAt: startAt ? new Date(startAt) : null }),
-          ...(endAt !== undefined && { endAt: endAt ? new Date(endAt) : null }),
+          ...(startAt !== undefined && { startAt: newStartAt }),
+          ...(endAt !== undefined && { endAt: newEndAt }),
           ...(allowLateUntil !== undefined && { allowLateUntil: allowLateUntil ? new Date(allowLateUntil) : null }),
           ...(allowCalculator !== undefined && { allowCalculator }),
           ...(allowNoteSheet !== undefined && { allowNoteSheet }),
