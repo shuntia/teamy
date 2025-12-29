@@ -126,7 +126,7 @@ export default async function TournamentPage({ params }: Props) {
     }
 
     // Load page content
-    let initialSections: Array<{ id: string; type: string; title: string; content: string }> | undefined = undefined
+    let initialSections: Array<{ id: string; type: 'header' | 'text' | 'image' | 'html'; title: string; content: string }> | undefined = undefined
     if (tournamentById.hostingRequest.pageContent) {
       try {
         initialSections = JSON.parse(tournamentById.hostingRequest.pageContent) as Array<{
