@@ -1317,8 +1317,8 @@ export function NewTestBuilder({
             calculatorType: payload.allowCalculator ? payload.calculatorType : undefined,
             allowNoteSheet: payload.allowNoteSheet,
             noteSheetInstructions: payload.allowNoteSheet ? payload.noteSheetInstructions : undefined,
-            autoApproveNoteSheet: payload.allowNoteSheet ? (payload.autoApproveNoteSheet ?? true) : undefined,
-            requireOneSitting: payload.requireOneSitting ?? true,
+            autoApproveNoteSheet: payload.allowNoteSheet ? ((payload as any).autoApproveNoteSheet ?? true) : undefined,
+            requireOneSitting: (payload as any).requireOneSitting ?? true,
             questions: payload.questions.map((q: any) => {
               const questionPayload: any = {
                 type: q.type,
