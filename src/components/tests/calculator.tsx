@@ -127,8 +127,11 @@ export function Calculator({ type, open, onOpenChange }: CalculatorProps) {
     const handleMouseMove = (e: MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      const deltaX = e.clientX - resizeStartRef.current!.x
-      const deltaY = e.clientY - resizeStartRef.current!.y
+      
+      if (!resizeStartRef.current) return
+      
+      const deltaX = e.clientX - resizeStartRef.current.x
+      const deltaY = e.clientY - resizeStartRef.current.y
       
       let newWidth = resizeStartRef.current.width
       let newHeight = resizeStartRef.current.height
