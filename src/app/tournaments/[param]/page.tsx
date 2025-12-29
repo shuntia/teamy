@@ -129,7 +129,12 @@ export default async function TournamentPage({ params }: Props) {
     let initialSections: Array<{ id: string; type: string; title: string; content: string }> | undefined = undefined
     if (tournamentById.hostingRequest.pageContent) {
       try {
-        initialSections = JSON.parse(tournamentById.hostingRequest.pageContent)
+        initialSections = JSON.parse(tournamentById.hostingRequest.pageContent) as Array<{
+          id: string
+          type: 'header' | 'text' | 'image' | 'html'
+          title: string
+          content: string
+        }>
       } catch (e) {
         console.error('Error parsing page content:', e)
       }
@@ -372,10 +377,15 @@ export default async function TournamentPage({ params }: Props) {
   } : null
 
   // Load page content
-  let initialSections: Array<{ id: string; type: string; title: string; content: string }> | undefined = undefined
+  let initialSections: Array<{ id: string; type: 'header' | 'text' | 'image' | 'html'; title: string; content: string }> | undefined = undefined
   if (hostingRequest.pageContent) {
     try {
-      initialSections = JSON.parse(hostingRequest.pageContent)
+      initialSections = JSON.parse(hostingRequest.pageContent) as Array<{
+        id: string
+        type: 'header' | 'text' | 'image' | 'html'
+        title: string
+        content: string
+      }>
     } catch (e) {
       console.error('Error parsing page content:', e)
     }
