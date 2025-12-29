@@ -353,6 +353,7 @@ export async function POST(request: NextRequest) {
       calculatorType?: CalculatorType
       noteSheetInstructions?: string
       autoApproveNoteSheet?: boolean
+      requireOneSitting?: boolean
       questions?: Array<{
         type: 'MCQ_SINGLE' | 'MCQ_MULTI' | 'SHORT_TEXT' | 'LONG_TEXT' | 'NUMERIC'
         promptMd: string
