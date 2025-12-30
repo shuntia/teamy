@@ -32,13 +32,13 @@ export function HomeHero({ isLoggedIn }: HomeHeroProps) {
         <ScrollAnimate animation="elegant" delay={200} duration={900}>
           <div className="text-lg sm:text-xl md:text-2xl text-muted-foreground font-medium max-w-4xl mx-auto leading-relaxed px-4 min-h-[80px] flex items-center justify-center">
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-              <span>The complete platform for</span>
+              <span>The complete platform for team</span>
               <Typewriter
                   text={[
-                    "team communication",
-                    "colaborating together",
-                    "staying organized",
-                    "achieving excellence",
+                    "communication",
+                    "organization",
+                    "planning",
+                    "management",
                   ]}
                   speed={60}
                   className="text-teamy-primary dark:text-teamy-accent font-semibold"

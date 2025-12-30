@@ -386,7 +386,7 @@ export async function GET(request: NextRequest) {
     // For TDs, get all events for their tournament's division
     const allEventsForTDs = new Map<string, Array<{ id: string; name: string; division: 'B' | 'C' }>>()
     for (const [tournamentId, division] of tournamentDivisions.entries()) {
-      const divisionsToFetch = division === 'B&C' ? ['B', 'C'] : [division]
+      const divisionsToFetch: Division[] = division === 'B&C' ? [Division.B, Division.C] : [division as Division]
       const events = await prisma.event.findMany({
         where: {
           division: { in: divisionsToFetch },
