@@ -17,6 +17,7 @@ export default async function TournamentManagePage({ params }: Props) {
   }
 
   // Verify the user has access to this tournament
+  // Check both hosting request and staff records
   const request = await prisma.tournamentHostingRequest.findFirst({
     where: {
       directorEmail: {
@@ -33,8 +34,38 @@ export default async function TournamentManagePage({ params }: Props) {
     },
   })
 
-  if (!request || !request.tournament) {
+  // Also check if user is a TD via TournamentStaff
+  const staffRecord = await prisma.tournamentStaff.findFirst({
+    where: {
+      tournamentId,
+      role: 'TOURNAMENT_DIRECTOR',
+      status: 'ACCEPTED',
+      OR: [
+        { userId: session.user.id },
+        {
+          email: {
+            equals: session.user.email,
+            mode: 'insensitive',
+          },
+        },
+      ],
+    },
+  })
+
+  // If no request and no staff record, user doesn't have access
+  if (!request && !staffRecord) {
     notFound()
+  }
+
+  // If we have a staff record but no request, we still need tournament data
+  let tournament = request?.tournament
+  if (!tournament) {
+    tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+    })
+    if (!tournament) {
+      notFound()
+    }
   }
 
   // Fetch staff for this tournament
@@ -87,13 +118,13 @@ export default async function TournamentManagePage({ params }: Props) {
   })
 
   // Get display division from hosting request (supports "B&C"), fallback to tournament division
-  const displayDivision = request.division || request.tournament.division
+  const displayDivision = request?.division || tournament.division
 
   // Parse eventsRun to get list of event IDs being run in this tournament
   let eventsRunIds: string[] = []
-  if (request.tournament.eventsRun && request.tournament.eventsRun.trim()) {
+  if (tournament.eventsRun && tournament.eventsRun.trim()) {
     try {
-      const parsed = JSON.parse(request.tournament.eventsRun)
+      const parsed = JSON.parse(tournament.eventsRun)
       eventsRunIds = Array.isArray(parsed) ? parsed : []
     } catch (e) {
       console.error('Error parsing eventsRun:', e)
@@ -129,7 +160,7 @@ export default async function TournamentManagePage({ params }: Props) {
     // For single division tournaments
     events = await prisma.event.findMany({
       where: {
-        division: request.tournament.division,
+        division: tournament.division,
         ...(eventsRunIds.length > 0 && { id: { in: eventsRunIds } }),
       },
       select: {
@@ -145,32 +176,32 @@ export default async function TournamentManagePage({ params }: Props) {
 
   // Serialize dates for client component
   const serializedTournament = {
-    id: request.tournament.id,
-    name: request.tournament.name,
-    slug: request.tournament.slug,
-    division: displayDivision, // Use hosting request division for display
-    startDate: request.tournament.startDate.toISOString(),
-    endDate: request.tournament.endDate.toISOString(),
-    startTime: request.tournament.startTime.toISOString(),
-    endTime: request.tournament.endTime.toISOString(),
-    location: request.tournament.location,
-    description: request.tournament.description,
-    isOnline: request.tournament.isOnline,
-    price: request.tournament.price,
-    additionalTeamPrice: request.tournament.additionalTeamPrice,
-    feeStructure: request.tournament.feeStructure,
-    registrationStartDate: request.tournament.registrationStartDate?.toISOString() || null,
-    registrationEndDate: request.tournament.registrationEndDate?.toISOString() || null,
-    earlyBirdDiscount: request.tournament.earlyBirdDiscount,
-    earlyBirdDeadline: request.tournament.earlyBirdDeadline?.toISOString() || null,
-    lateFee: request.tournament.lateFee,
-    lateFeeStartDate: request.tournament.lateFeeStartDate?.toISOString() || null,
-    otherDiscounts: request.tournament.otherDiscounts,
-    eligibilityRequirements: request.tournament.eligibilityRequirements,
-    eventsRun: request.tournament.eventsRun,
-    trialEvents: request.tournament.trialEvents,
-    level: request.tournamentLevel || null,
-    published: request.tournament.published,
+    id: tournament.id,
+    name: tournament.name,
+    slug: tournament.slug,
+    division: displayDivision, // Use hosting request division for display if available
+    startDate: tournament.startDate.toISOString(),
+    endDate: tournament.endDate.toISOString(),
+    startTime: tournament.startTime.toISOString(),
+    endTime: tournament.endTime.toISOString(),
+    location: tournament.location,
+    description: tournament.description,
+    isOnline: tournament.isOnline,
+    price: tournament.price,
+    additionalTeamPrice: tournament.additionalTeamPrice,
+    feeStructure: tournament.feeStructure,
+    registrationStartDate: tournament.registrationStartDate?.toISOString() || null,
+    registrationEndDate: tournament.registrationEndDate?.toISOString() || null,
+    earlyBirdDiscount: tournament.earlyBirdDiscount,
+    earlyBirdDeadline: tournament.earlyBirdDeadline?.toISOString() || null,
+    lateFee: tournament.lateFee,
+    lateFeeStartDate: tournament.lateFeeStartDate?.toISOString() || null,
+    otherDiscounts: tournament.otherDiscounts,
+    eligibilityRequirements: tournament.eligibilityRequirements,
+    eventsRun: tournament.eventsRun,
+    trialEvents: tournament.trialEvents,
+    level: request?.tournamentLevel || null,
+    published: tournament.published,
   }
 
   const serializedStaff = staff.map(s => ({

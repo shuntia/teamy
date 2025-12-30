@@ -1562,7 +1562,10 @@ export function TDTournamentManageClient({
               </CardHeader>
               <CardContent>
                 {loadingStaff ? (
-                  <p className="text-muted-foreground text-center py-8">Loading staff...</p>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin" />
+                    <p>Loading staff...</p>
+                  </div>
                 ) : staff.length === 0 ? (
                   <div className="text-center py-8">
                     <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />

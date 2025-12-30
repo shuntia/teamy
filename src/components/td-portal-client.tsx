@@ -261,10 +261,18 @@ export function TDPortalClient({ user, requests }: TDPortalClientProps) {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {approvedRequests.map((request) => (
+              {approvedRequests.map((request) => {
+                // For staff records (prefixed with "staff-"), use tournament route
+                // For regular requests, use manage route
+                const isStaffRecord = request.id.startsWith('staff-')
+                const href = isStaffRecord && request.tournament
+                  ? `/td/tournament/${request.tournament.id}`
+                  : `/td/manage/${request.id}`
+                
+                return (
                 <Link 
                   key={request.id} 
-                  href={`/td/manage/${request.id}`}
+                  href={href}
                   className="block"
                 >
                   <Card className="overflow-hidden transition-all h-full cursor-pointer hover:shadow-lg hover:border-primary/30">
@@ -297,7 +305,8 @@ export function TDPortalClient({ user, requests }: TDPortalClientProps) {
                     </CardContent>
                   </Card>
                 </Link>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

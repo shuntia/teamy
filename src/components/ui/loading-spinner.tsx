@@ -10,28 +10,57 @@ interface LoadingSpinnerProps {
   label?: string
 }
 
-const sizeClasses = {
-  xs: "w-3 h-3",
-  sm: "w-4 h-4",
-  md: "w-6 h-6",
-  lg: "w-10 h-10",
-  xl: "w-16 h-16",
-}
+// Animation constants
+const EASING = "cubic-bezier(0.68, -0.55, 0.27, 1.55)"
+const EASING_PULSE = "cubic-bezier(0.4, 0, 0.6, 1)"
+const EASING_PING = "cubic-bezier(0, 0, 0.2, 1)"
 
-const dotSizes = {
-  xs: "w-1.5 h-1.5",
-  sm: "w-2 h-2",
-  md: "w-2.5 h-2.5",
-  lg: "w-3.5 h-3.5",
-  xl: "w-5 h-5",
-}
+// Size configurations
+const SIZES = {
+  xs: { container: "w-3 h-3", dot: "w-1.5 h-1.5", bar: "w-0.5 h-3" },
+  sm: { container: "w-4 h-4", dot: "w-2 h-2", bar: "w-0.5 h-4" },
+  md: { container: "w-6 h-6", dot: "w-2.5 h-2.5", bar: "w-1 h-5" },
+  lg: { container: "w-10 h-10", dot: "w-3.5 h-3.5", bar: "w-1.5 h-7" },
+  xl: { container: "w-16 h-16", dot: "w-5 h-5", bar: "w-2 h-10" },
+} as const
 
-const barSizes = {
-  xs: "w-0.5 h-3",
-  sm: "w-0.5 h-4",
-  md: "w-1 h-5",
-  lg: "w-1.5 h-7",
-  xl: "w-2 h-10",
+// Helper: Animated dots component
+function AnimatedDots({
+  count,
+  size,
+  delayMultiplier = 0.2,
+  animationType = "bounce",
+  className,
+}: {
+  count: number
+  size: LoadingSpinnerSize
+  delayMultiplier?: number
+  animationType?: "bounce" | "pulse"
+  className?: string
+}) {
+  const duration = animationType === "bounce" ? "1.4s" : "1.5s"
+  const easing = animationType === "bounce" ? EASING : EASING_PULSE
+  const sizeClass = animationType === "pulse" ? "w-1.5 h-1.5" : SIZES[size].dot
+
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "rounded-full bg-primary shadow-md",
+            sizeClass,
+            animationType === "pulse" && "bg-primary/50",
+            className
+          )}
+          style={{
+            animation: `${animationType} ${duration} ${easing} infinite`,
+            animationDelay: `${i * delayMultiplier}s`,
+          }}
+        />
+      ))}
+    </>
+  )
 }
 
 export function LoadingSpinner({
@@ -40,14 +69,16 @@ export function LoadingSpinner({
   className,
   label,
 }: LoadingSpinnerProps) {
+  const sizeClass = SIZES[size].container
+
   const renderSpinner = () => {
     switch (variant) {
       case "spinner":
         return (
-          <div className={cn("relative", sizeClasses[size], className)}>
+          <div className={cn("relative", sizeClass, className)}>
             <svg
               className="animate-spin text-primary"
-              style={{ animation: "spin 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite" }}
+              style={{ animation: `spin 1s ${EASING} infinite` }}
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -72,36 +103,20 @@ export function LoadingSpinner({
       case "dots":
         return (
           <div className={cn("flex items-center gap-2", className)}>
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className={cn(
-                  "rounded-full bg-primary shadow-md",
-                  dotSizes[size]
-                )}
-                style={{
-                  animation: `bounce 1.4s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite`,
-                  animationDelay: `${i * 0.16}s`,
-                }}
-              />
-            ))}
+            <AnimatedDots count={3} size={size} delayMultiplier={0.16} />
           </div>
         )
 
       case "pulse":
         return (
-          <div className={cn("relative", sizeClasses[size], className)}>
-            <div 
+          <div className={cn("relative", sizeClass, className)}>
+            <div
               className="absolute inset-0 rounded-full bg-primary/40"
-              style={{
-                animation: "ping 2s cubic-bezier(0, 0, 0.2, 1) infinite",
-              }}
+              style={{ animation: `ping 2s ${EASING_PING} infinite` }}
             />
-            <div 
+            <div
               className="absolute inset-0 rounded-full bg-primary shadow-lg"
-              style={{
-                animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-              }}
+              style={{ animation: `pulse 2s ${EASING_PULSE} infinite` }}
             />
             <div className="absolute inset-2 rounded-full bg-primary/80" />
           </div>
@@ -110,15 +125,12 @@ export function LoadingSpinner({
       case "bars":
         return (
           <div className={cn("flex items-end gap-1.5", className)}>
-            {[0, 1, 2, 3, 4].map((i) => (
+            {Array.from({ length: 5 }, (_, i) => (
               <div
                 key={i}
-                className={cn(
-                  "bg-primary rounded-sm shadow-md",
-                  barSizes[size]
-                )}
+                className={cn("bg-primary rounded-sm shadow-md", SIZES[size].bar)}
                 style={{
-                  animation: `barWave 1.2s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite`,
+                  animation: `barWave 1.2s ${EASING} infinite`,
                   animationDelay: `${i * 0.1}s`,
                 }}
               />
@@ -129,14 +141,8 @@ export function LoadingSpinner({
       case "ring":
         return (
           <div
-            className={cn(
-              "relative rounded-full border-4 border-primary/10",
-              sizeClasses[size],
-              className
-            )}
-            style={{
-              animation: "spin 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite",
-            }}
+            className={cn("relative rounded-full border-4 border-primary/10", sizeClass, className)}
+            style={{ animation: `spin 1s ${EASING} infinite` }}
           >
             <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary border-r-primary/50" />
             <div className="absolute inset-2 rounded-full border-2 border-transparent border-b-primary/70" />
@@ -145,26 +151,16 @@ export function LoadingSpinner({
 
       case "orbit":
         return (
-          <div className={cn("relative", sizeClasses[size], className)}>
-            {/* Outer ring */}
-            <div 
-              className="absolute inset-0 rounded-full border-2 border-primary/10"
-            />
-            {/* Main orbit */}
-            <div 
+          <div className={cn("relative", sizeClass, className)}>
+            <div className="absolute inset-0 rounded-full border-2 border-primary/10" />
+            <div
               className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary"
-              style={{
-                animation: "spin 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite",
-              }}
+              style={{ animation: `spin 1s ${EASING} infinite` }}
             />
-            {/* Reverse orbit */}
             <div
               className="absolute inset-1 rounded-full border-2 border-transparent border-b-primary/70"
-              style={{ 
-                animation: "spin 1.5s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite reverse",
-              }}
+              style={{ animation: `spin 1.5s ${EASING} infinite reverse` }}
             />
-            {/* Center dot */}
             <div className="absolute inset-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary shadow-lg" />
           </div>
         )
@@ -196,7 +192,6 @@ export function LoadingOverlay({ message = "Loading...", variant = "orbit" }: Lo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md">
       <div className="relative flex flex-col items-center gap-6 p-10 rounded-3xl bg-gradient-to-br from-card/95 to-card/90 backdrop-blur-xl border border-border/60 shadow-2xl">
-        {/* Subtle glow effect */}
         <div className="absolute inset-0 rounded-3xl bg-primary/5 pointer-events-none" />
         <div className="relative">
           <LoadingSpinner variant={variant} size="xl" />
@@ -205,18 +200,6 @@ export function LoadingOverlay({ message = "Loading...", variant = "orbit" }: Lo
           <p className="text-xl font-semibold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
             {message}
           </p>
-          <div className="mt-3 flex gap-1.5 justify-center">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-1.5 h-1.5 rounded-full bg-primary/50"
-                style={{
-                  animation: "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-                  animationDelay: `${i * 0.2}s`,
-                }}
-              />
-            ))}
-          </div>
         </div>
       </div>
     </div>
@@ -269,20 +252,16 @@ export function PageLoading({
 }: PageLoadingProps) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] gap-8 py-16">
-      {/* Main spinner container with glow */}
       <div className="relative">
-        <div 
+        <div
           className="absolute inset-0 blur-2xl bg-primary/20 rounded-full scale-150"
-          style={{
-            animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-          }}
+          style={{ animation: `pulse 2s ${EASING_PULSE} infinite` }}
         />
         <div className="relative">
           <LoadingSpinner variant={variant} size="lg" />
         </div>
       </div>
-      
-      {/* Text content */}
+
       <div className="text-center space-y-3 max-w-md px-4">
         <h3 className="text-xl font-bold bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text text-transparent">
           {title}
@@ -292,22 +271,7 @@ export function PageLoading({
             {description}
           </p>
         )}
-        
-        {/* Progress dots */}
-        <div className="flex gap-1.5 justify-center pt-2">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="w-2 h-2 rounded-full bg-primary/60"
-              style={{
-                animation: "bounce 1.4s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite",
-                animationDelay: `${i * 0.2}s`,
-              }}
-            />
-          ))}
-        </div>
       </div>
     </div>
   )
 }
-

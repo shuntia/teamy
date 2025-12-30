@@ -203,15 +203,65 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
   )
 
   // Prefetch tests server-side to eliminate loading delay
-  // Get all event IDs that the user is assigned to
+  // First, get hosting request divisions for all tournaments (needed for TD event fetching)
+  const tournamentIds = staffMemberships.map(m => m.tournament.id)
+  const hostingRequests = await prisma.tournamentHostingRequest.findMany({
+    where: {
+      tournament: {
+        id: { in: tournamentIds },
+      },
+    },
+    select: {
+      id: true,
+      division: true,
+      tournament: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  })
+  const hostingRequestMap = new Map(
+    hostingRequests
+      .filter(hr => hr.tournament !== null)
+      .map(hr => [hr.tournament!.id, hr.division])
+  )
+
+  // Get all event IDs that the user is assigned to (for ES) or all events for tournament division (for TD)
   const userEventIds = new Set<string>()
+  const tdTournamentIds = new Set<string>()
+  const tournamentDivisions = new Map<string, 'B' | 'C' | 'B&C'>()
+  
   staffMemberships.forEach(membership => {
-    membership.events.forEach(e => userEventIds.add(e.event.id))
+    if (membership.role === 'TOURNAMENT_DIRECTOR') {
+      // For TDs, we'll fetch all events for the tournament's division
+      tdTournamentIds.add(membership.tournament.id)
+      // Get division from hosting request if available, otherwise from tournament
+      const division = hostingRequestMap.get(membership.tournament.id) || membership.tournament.division
+      tournamentDivisions.set(membership.tournament.id, division as 'B' | 'C' | 'B&C')
+    } else {
+      // For ES, use assigned events
+      membership.events.forEach(e => userEventIds.add(e.event.id))
+    }
   })
 
-  // Fetch all tests for events the user is assigned to (collaborative access)
-  const tournamentIds = staffMemberships.map(m => m.tournament.id)
-  const eventIdsArray = Array.from(userEventIds)
+  // For TDs, fetch all events for their tournament's division
+  const tdEventIds = new Set<string>()
+  for (const [tournamentId, division] of tournamentDivisions.entries()) {
+    // Fetch events matching the division (handle "B&C" as both B and C)
+    const divisionsToFetch = division === 'B&C' ? ['B', 'C'] : [division]
+    const events = await prisma.event.findMany({
+      where: {
+        division: { in: divisionsToFetch },
+      },
+      select: { id: true },
+    })
+    events.forEach(e => tdEventIds.add(e.id))
+  }
+
+  // Combine ES assigned events and TD all events
+  const allUserEventIds = new Set([...userEventIds, ...tdEventIds])
+  const eventIdsArray = Array.from(allUserEventIds)
   
   const allTests = eventIdsArray.length > 0 ? await prisma.eSTest.findMany({
     where: {
@@ -266,33 +316,40 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
     testsByEvent.get(test.eventId)!.push(test)
   }
 
-  // Get hosting request divisions for all tournaments
-  const hostingRequests = await prisma.tournamentHostingRequest.findMany({
-    where: {
-      tournament: {
-        id: { in: tournamentIds },
+
+  // For TDs, get all events for their tournament's division
+  const allEventsForTDs = new Map<string, Array<{ id: string; name: string; division: 'B' | 'C' }>>()
+  for (const [tournamentId, division] of tournamentDivisions.entries()) {
+    const divisionsToFetch = division === 'B&C' ? ['B', 'C'] : [division]
+    const events = await prisma.event.findMany({
+      where: {
+        division: { in: divisionsToFetch },
       },
-    },
-    select: {
-      id: true,
-      division: true,
-      tournament: {
-        select: {
-          id: true,
-        },
+      select: {
+        id: true,
+        name: true,
+        division: true,
       },
-    },
-  })
-  const hostingRequestMap = new Map(
-    hostingRequests
-      .filter(hr => hr.tournament !== null)
-      .map(hr => [hr.tournament!.id, hr.division])
-  )
+      orderBy: { name: 'asc' },
+    })
+    allEventsForTDs.set(tournamentId, events)
+  }
 
   // Map staff memberships with tests organized by event
   const staffMembershipsWithTests = staffMemberships.map(membership => {
     // Use hosting request division for display if available (supports "B&C")
     const displayDivision = hostingRequestMap.get(membership.tournament.id) || membership.tournament.division
+    
+    // For TDs, use all events for the tournament's division; for ES, use assigned events
+    const eventsToShow = membership.role === 'TOURNAMENT_DIRECTOR'
+      ? (allEventsForTDs.get(membership.tournament.id) || []).map(event => ({
+          event: {
+            id: event.id,
+            name: event.name,
+            division: event.division,
+          },
+        }))
+      : membership.events
     
     return {
       id: membership.id,
@@ -309,7 +366,7 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
         startDate: membership.tournament.startDate.toISOString(),
         slug: membership.tournament.slug,
       },
-      events: [...membership.events].sort((a, b) => a.event.name.localeCompare(b.event.name)).map(e => {
+      events: [...eventsToShow].sort((a, b) => a.event.name.localeCompare(b.event.name)).map(e => {
         // Look for tests for this event across ALL tournaments the user has access to
         let eventTests: typeof allTests = []
         for (const [tournamentId, eventMap] of testsByTournament.entries()) {

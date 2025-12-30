@@ -36,13 +36,80 @@ export default async function TDPortalPage() {
     },
   })
 
-  // If no requests found for this email, show unauthorized message
-  if (requests.length === 0) {
+  // Also check if the user is a TD via TournamentStaff (for users upgraded to TD)
+  const staffRecords = await prisma.tournamentStaff.findMany({
+    where: {
+      OR: [
+        { userId: session.user.id },
+        {
+          email: {
+            equals: session.user.email,
+            mode: 'insensitive',
+          },
+        },
+      ],
+      role: 'TOURNAMENT_DIRECTOR',
+      status: 'ACCEPTED', // Only include accepted staff
+    },
+    include: {
+      tournament: {
+        select: {
+          id: true,
+          name: true,
+          division: true,
+          startDate: true,
+          endDate: true,
+        },
+      },
+    },
+  })
+
+  // Combine requests and staff records, deduplicating by tournament ID
+  const tournamentIds = new Set<string>()
+  const allAccess: any[] = []
+
+  // Add hosting requests
+  for (const request of requests) {
+    if (request.tournament && !tournamentIds.has(request.tournament.id)) {
+      tournamentIds.add(request.tournament.id)
+      allAccess.push(request)
+    }
+  }
+
+  // Add staff records (convert to request-like format for the component)
+  for (const staff of staffRecords) {
+    if (staff.tournament && !tournamentIds.has(staff.tournament.id)) {
+      tournamentIds.add(staff.tournament.id)
+      // Create a request-like object for staff records
+      // Use staff.id as a marker, but we'll need to handle routing differently
+      allAccess.push({
+        id: `staff-${staff.id}`, // Prefix to identify staff records
+        tournamentId: staff.tournament.id,
+        tournamentName: staff.tournament.name,
+        tournamentLevel: 'invitational', // Default value
+        division: staff.tournament.division,
+        tournamentFormat: 'in-person', // Default value
+        location: null,
+        directorName: staff.name || session.user.name || '',
+        directorEmail: staff.email,
+        directorPhone: null,
+        otherNotes: null,
+        status: 'APPROVED' as const, // Staff records are always approved
+        reviewNotes: null,
+        tournament: staff.tournament,
+        createdAt: staff.createdAt,
+        updatedAt: staff.updatedAt,
+      })
+    }
+  }
+
+  // If no access found, show unauthorized message
+  if (allAccess.length === 0) {
     return <TDLoginClient unauthorized email={session.user.email} />
   }
 
   // Serialize dates for client component
-  const serializedRequests = requests.map(request => ({
+  const serializedRequests = allAccess.map(request => ({
     ...request,
     createdAt: request.createdAt.toISOString(),
     updatedAt: request.updatedAt.toISOString(),

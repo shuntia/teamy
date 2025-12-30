@@ -90,18 +90,67 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Get all event IDs that the user is assigned to
+    // Get hosting request divisions for all tournaments (needed for TD event fetching)
+    const tournamentIds = staffMemberships.map(m => m.tournament.id)
+    const hostingRequests = await prisma.tournamentHostingRequest.findMany({
+      where: {
+        tournament: {
+          id: { in: tournamentIds },
+        },
+      },
+      select: {
+        id: true,
+        division: true,
+        tournament: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    })
+    const hostingRequestMap = new Map(
+      hostingRequests
+        .filter(hr => hr.tournament !== null)
+        .map(hr => [hr.tournament!.id, hr.division])
+    )
+
+    // Get all event IDs that the user is assigned to (for ES) or all events for tournament division (for TD)
     const userEventIds = new Set<string>()
+    const tournamentDivisions = new Map<string, 'B' | 'C' | 'B&C'>()
+    
     staffMemberships.forEach(membership => {
-      membership.events.forEach(e => userEventIds.add(e.event.id))
+      if (membership.role === 'TOURNAMENT_DIRECTOR') {
+        // For TDs, we'll fetch all events for the tournament's division
+        const division = hostingRequestMap.get(membership.tournament.id) || membership.tournament.division
+        tournamentDivisions.set(membership.tournament.id, division as 'B' | 'C' | 'B&C')
+      } else {
+        // For ES, use assigned events
+        membership.events.forEach(e => userEventIds.add(e.event.id))
+      }
     })
 
+    // For TDs, fetch all events for their tournament's division
+    const tdEventIds = new Set<string>()
+    for (const [tournamentId, division] of tournamentDivisions.entries()) {
+      // Fetch events matching the division (handle "B&C" as both B and C)
+      const divisionsToFetch = division === 'B&C' ? ['B', 'C'] : [division]
+      const events = await prisma.event.findMany({
+        where: {
+          division: { in: divisionsToFetch },
+        },
+        select: { id: true },
+      })
+      events.forEach(e => tdEventIds.add(e.id))
+    }
+
+    // Combine ES assigned events and TD all events
+    const allUserEventIds = new Set([...userEventIds, ...tdEventIds])
+
     console.log('Fetching ES tests for user:', session.user.email)
-    console.log('User event IDs:', Array.from(userEventIds))
-    console.log('User tournament IDs:', staffMemberships.map(m => m.tournament.id))
+    console.log('User event IDs:', Array.from(allUserEventIds))
+    console.log('User tournament IDs:', tournamentIds)
 
     // First, let's check ALL tests in the tournaments to see what exists
-    const tournamentIds = staffMemberships.map(m => m.tournament.id)
     const allTournamentTests = await prisma.eSTest.findMany({
       where: {
         tournamentId: { in: tournamentIds },
@@ -118,9 +167,10 @@ export async function GET(request: NextRequest) {
     console.log('ALL tests in user tournaments:', allTournamentTests)
 
     // Fetch all tests for events the user is assigned to (collaborative access)
-    // This returns ALL tests for events the user is assigned to, regardless of who created them
+    // For TDs, this includes all events in their tournament's division
+    // This returns ALL tests for events the user has access to, regardless of who created them
     // IMPORTANT: We don't filter by staffId - all staff assigned to an event can see all tests for that event
-    const eventIdsArray = Array.from(userEventIds)
+    const eventIdsArray = Array.from(allUserEventIds)
     console.log('Querying tests with:', { tournamentIds, eventIdsArray })
     
     const allTests = await prisma.eSTest.findMany({
@@ -199,28 +249,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get hosting request divisions for all tournaments
-    const hostingRequests = await prisma.tournamentHostingRequest.findMany({
-      where: {
-        tournament: {
-          id: { in: tournamentIds },
+    // For TDs, get all events for their tournament's division
+    const allEventsForTDs = new Map<string, Array<{ id: string; name: string; division: 'B' | 'C' }>>()
+    for (const [tournamentId, division] of tournamentDivisions.entries()) {
+      const divisionsToFetch = division === 'B&C' ? ['B', 'C'] : [division]
+      const events = await prisma.event.findMany({
+        where: {
+          division: { in: divisionsToFetch },
         },
-      },
-      select: {
-        id: true,
-        division: true,
-        tournament: {
-          select: {
-            id: true,
-          },
+        select: {
+          id: true,
+          name: true,
+          division: true,
         },
-      },
-    })
-    const hostingRequestMap = new Map(
-      hostingRequests
-        .filter(hr => hr.tournament !== null)
-        .map(hr => [hr.tournament!.id, hr.division])
-    )
+        orderBy: { name: 'asc' },
+      })
+      allEventsForTDs.set(tournamentId, events)
+    }
 
     // Map staff memberships with tests organized by event
     // For each event assignment, look for tests in ANY tournament the user has access to
@@ -228,6 +273,17 @@ export async function GET(request: NextRequest) {
     const staffMembershipsWithTests = staffMemberships.map(membership => {
       // Use hosting request division for display if available (supports "B&C")
       const displayDivision = hostingRequestMap.get(membership.tournament.id) || membership.tournament.division
+      
+      // For TDs, use all events for the tournament's division; for ES, use assigned events
+      const eventsToShow = membership.role === 'TOURNAMENT_DIRECTOR'
+        ? (allEventsForTDs.get(membership.tournament.id) || []).map(event => ({
+            event: {
+              id: event.id,
+              name: event.name,
+              division: event.division,
+            },
+          }))
+        : membership.events
       
       const membershipData = {
         id: membership.id,
@@ -244,7 +300,7 @@ export async function GET(request: NextRequest) {
           startDate: membership.tournament.startDate.toISOString(),
           slug: membership.tournament.slug,
         },
-        events: [...membership.events].sort((a, b) => a.event.name.localeCompare(b.event.name)).map(e => {
+        events: [...eventsToShow].sort((a, b) => a.event.name.localeCompare(b.event.name)).map(e => {
           // Look for tests for this event across ALL tournaments the user has access to
           // This allows tests to be visible to all ESs assigned to the same event, even if they're in different tournament memberships
           let eventTests: typeof allTests = []

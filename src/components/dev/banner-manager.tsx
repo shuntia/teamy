@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, RefreshCw, Save, Eye, EyeOff } from 'lucide-react'
+import { Loader2, RefreshCw, Save } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { useToast } from '@/components/ui/use-toast'
 
 interface BannerSettings {
   enabled: boolean
@@ -17,6 +18,7 @@ interface BannerSettings {
 }
 
 export function BannerManager() {
+  const { toast } = useToast()
   const [settings, setSettings] = useState<BannerSettings>({
     enabled: true,
     text: 'This website is still a work in progress! Please report any issues to teamysite@gmail.com',
@@ -85,10 +87,17 @@ export function BannerManager() {
         }),
       ])
 
-      alert('Banner settings saved successfully!')
+      toast({
+        title: 'Success',
+        description: 'Banner settings saved successfully!',
+      })
     } catch (error) {
       console.error('Failed to save banner settings:', error)
-      alert('Failed to save banner settings')
+      toast({
+        title: 'Error',
+        description: 'Failed to save banner settings',
+        variant: 'destructive',
+      })
     } finally {
       setSaving(false)
     }

@@ -39,7 +39,27 @@ async function isTournamentDirector(userId: string, userEmail: string, tournamen
     },
   })
   
-  return !!hostingRequest
+  if (hostingRequest) return true
+  
+  // Also check if user is a TD via TournamentStaff
+  const staffRecord = await prisma.tournamentStaff.findFirst({
+    where: {
+      tournamentId,
+      role: 'TOURNAMENT_DIRECTOR',
+      status: 'ACCEPTED',
+      OR: [
+        { userId },
+        {
+          email: {
+            equals: userEmail,
+            mode: 'insensitive',
+          },
+        },
+      ],
+    },
+  })
+  
+  return !!staffRecord
 }
 
 // GET /api/td/tournaments/[tournamentId]/tests
