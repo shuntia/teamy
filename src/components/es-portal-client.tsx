@@ -40,6 +40,7 @@ import {
   ExternalLink,
   Search,
   Pencil,
+  RefreshCw,
 } from 'lucide-react'
 import { format, isPast, isToday } from 'date-fns'
 import Link from 'next/link'
@@ -194,6 +195,9 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
   const [loadingTests, setLoadingTests] = useState(false)
   const hasInitialized = useRef(false)
   const hasFetchedTests = useRef(false)
+  const lastFetchTime = useRef<number>(0)
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastActiveTournamentRef = useRef<string>('')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [testToDelete, setTestToDelete] = useState<Test | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -273,8 +277,8 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
       setDeleteDialogOpen(false)
       setTestToDelete(null)
       
-      // Refresh tests list
-      fetchTests()
+      // Refresh tests list (force fetch after delete)
+      fetchTests(true)
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -309,12 +313,32 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
   }
 
   // Fetch tests organized by event
-  const fetchTests = async () => {
+  // Only fetch if enough time has passed since last fetch (debounce)
+  const fetchTests = async (force = false) => {
+    const now = Date.now()
+    const timeSinceLastFetch = now - lastFetchTime.current
+    const MIN_FETCH_INTERVAL = 2000 // Minimum 2 seconds between fetches
+    
+    // Prevent too-frequent fetches unless forced
+    if (!force && timeSinceLastFetch < MIN_FETCH_INTERVAL) {
+      // Schedule a fetch after the minimum interval
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current)
+      }
+      fetchTimeoutRef.current = setTimeout(() => {
+        fetchTests(true)
+      }, MIN_FETCH_INTERVAL - timeSinceLastFetch)
+      return
+    }
+    
     if (loadingTests) return
+    
+    lastFetchTime.current = now
     setLoadingTests(true)
     try {
-      // Add cache-busting to ensure we get fresh data
-      const res = await fetch(`/api/es/tests?t=${Date.now()}`)
+      // Only use cache-busting when forced (e.g., after delete)
+      const url = force ? `/api/es/tests?t=${Date.now()}` : '/api/es/tests'
+      const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
         setStaffMembershipsWithTests(data.staffMemberships)
@@ -329,41 +353,50 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
     }
   }
 
-  // Check if tests were provided from server-side - if not, fetch them on mount
+  // Helper to check if we have tests data for the active tournament
+  const hasTestsForActiveTournament = () => {
+    if (!activeTournament) return false
+    const membership = staffMembershipsWithTests.find(m => m.tournament.id === activeTournament)
+    if (!membership) return false
+    // Check if we have any events with tests data loaded
+    return membership.events.some(e => Array.isArray(e.tests))
+  }
+
+  // Fetch tests when tournament is selected and we don't have data yet
+  // Similar to TD portal: only fetch when tab is active and data is empty
+  useEffect(() => {
+    // Only fetch if:
+    // 1. We have an active tournament
+    // 2. Tournament actually changed (not just initial render)
+    // 3. We don't already have tests data for this tournament
+    if (activeTournament && activeTournament !== lastActiveTournamentRef.current) {
+      lastActiveTournamentRef.current = activeTournament
+      
+      // Check if we already have data for this tournament
+      if (!hasTestsForActiveTournament()) {
+        fetchTests(true) // Force fetch when switching to a tournament without data
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTournament])
+  
+  // Initial fetch on mount only if we don't have server-side data
   useEffect(() => {
     // Check if tests are already in the initial state (from server-side)
     const hasServerSideTests = staffMembershipsWithTests.some(m => 
-      m.events.some(e => e.tests && e.tests.length > 0)
+      m.events.some(e => Array.isArray(e.tests))
     )
     
     // Only fetch if we don't already have tests from server-side
-    if (!hasServerSideTests) {
-      fetchTests()
+    if (!hasServerSideTests && activeTournament) {
+      // Only fetch if we have an active tournament and no data
+      if (!hasTestsForActiveTournament()) {
+        fetchTests(true) // Force initial fetch
+      }
     }
     hasFetchedTests.current = true
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Run once on mount
-  
-  // Also refetch tests when tournament changes (for fresh data when switching tournaments)
-  useEffect(() => {
-    // Only refetch if we've already done the initial fetch
-    if (hasFetchedTests.current) {
-      fetchTests()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTournament])
-  
-  // Refresh tests when window regains focus (user might have created a test in another tab)
-  useEffect(() => {
-    const handleFocus = () => {
-      if (activeTournament) {
-        fetchTests()
-      }
-    }
-    window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTournament])
 
   // Ensure URL is set correctly on mount
   useEffect(() => {
@@ -396,6 +429,15 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
+  
+  useEffect(() => {
+    // Clean up any pending fetch timeout on unmount
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current)
+      }
+    }
+  }, [])
   
   useEffect(() => {
     if (activeTournament) {
@@ -537,7 +579,12 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
-                            {membership.events.length === 0 ? (
+                            {loadingTests ? (
+                              <div className="text-center py-8 text-muted-foreground">
+                                <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin" />
+                                <p>Loading events and tests...</p>
+                              </div>
+                            ) : membership.events.length === 0 ? (
                               <div className="text-center py-8">
                                 <ClipboardList className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                                 <p className="text-muted-foreground">No events assigned yet.</p>
@@ -563,11 +610,15 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
                                       <SelectItem value="all">All Events</SelectItem>
                                       {[...membership.events]
                                         .sort((a, b) => a.event.name.localeCompare(b.event.name))
-                                        .map((eventAssignment) => (
-                                          <SelectItem key={eventAssignment.event.id} value={eventAssignment.event.id}>
-                                            {eventAssignment.event.name} (Div {eventAssignment.event.division})
-                                          </SelectItem>
-                                        ))}
+                                        .map((eventAssignment) => {
+                                          const isTrialEvent = eventAssignment.event.id === null
+                                          const eventKey = eventAssignment.event.id || `trial-${eventAssignment.event.name}`
+                                          return (
+                                            <SelectItem key={eventKey} value={eventKey}>
+                                              {eventAssignment.event.name} {isTrialEvent && '(Trial)'} (Div {eventAssignment.event.division})
+                                            </SelectItem>
+                                          )
+                                        })}
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -576,9 +627,12 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
                                 {[...membership.events]
                                   .sort((a, b) => a.event.name.localeCompare(b.event.name))
                                   .filter((eventAssignment) => {
-                                    // Filter by selected event
-                                    if (eventFilter !== 'all' && eventAssignment.event.id !== eventFilter) {
-                                      return false
+                                    // Filter by selected event (handle trial events)
+                                    if (eventFilter !== 'all') {
+                                      const eventKey = eventAssignment.event.id || `trial-${eventAssignment.event.name}`
+                                      if (eventKey !== eventFilter) {
+                                        return false
+                                      }
                                     }
                                     // Show event if it has tests matching search query or no search query
                                     if (!searchQuery) return true
@@ -600,12 +654,20 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
                                       return null
                                     }
                                     
+                                    const isTrialEvent = eventAssignment.event.id === null
+                                    const eventKey = eventAssignment.event.id || `trial-${eventAssignment.event.name}`
+                                    
                                     return (
-                                      <div key={eventAssignment.event.id} className="space-y-3">
+                                      <div key={eventKey} className="space-y-3">
                                         <div className="flex items-center justify-between pb-2 border-b border-border">
                                           <div>
                                             <div className="flex items-center gap-2">
                                               <h3 className="font-semibold text-lg">{eventAssignment.event.name}</h3>
+                                              {isTrialEvent && (
+                                                <Badge variant="outline" className="text-xs bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-400">
+                                                  Trial
+                                                </Badge>
+                                              )}
                                               <Badge variant="outline" className="text-xs">
                                                 Div {eventAssignment.event.division}
                                               </Badge>
@@ -618,7 +680,11 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
                                             </p>
                                           </div>
                                           <Link 
-                                            href={`/es/tests/new?staffId=${membership.id}&eventId=${eventAssignment.event.id}`}
+                                            href={
+                                              isTrialEvent
+                                                ? `/es/tests/new?staffId=${membership.id}&eventName=${encodeURIComponent(eventAssignment.event.name)}&trialEventDivision=${eventAssignment.event.division}`
+                                                : `/es/tests/new?staffId=${membership.id}&eventId=${eventAssignment.event.id}`
+                                            }
                                           >
                                             <Button size="sm" className="bg-teamy-primary text-white hover:bg-teamy-primary-dark">
                                               <Plus className="h-4 w-4 mr-2" />
@@ -628,7 +694,7 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
                                         </div>
                                         
                                         {filteredTests.length === 0 ? (
-                                          <div className="text-center py-6 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-border">
+                                          <div className="text-center py-6 bg-muted/50 rounded-lg border border-border">
                                             <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                                             <p className="text-sm text-muted-foreground">
                                               {searchQuery 
@@ -641,7 +707,7 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
                                             {filteredTests.map((test) => (
                                               <div 
                                                 key={test.id}
-                                                className="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-slate-900/60"
+                                                className="flex items-center justify-between p-4 rounded-lg border bg-card"
                                               >
                                                 <div className="flex-1">
                                                   <div className="flex items-center gap-2 mb-1">
@@ -717,8 +783,11 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
                                 {/* Show message if no events match filters */}
                                 {[...membership.events]
                                   .filter((eventAssignment) => {
-                                    if (eventFilter !== 'all' && eventAssignment.event.id !== eventFilter) {
-                                      return false
+                                    if (eventFilter !== 'all') {
+                                      const eventKey = eventAssignment.event.id || `trial-${eventAssignment.event.name}`
+                                      if (eventKey !== eventFilter) {
+                                        return false
+                                      }
                                     }
                                     if (!searchQuery) return true
                                     const tests = eventAssignment.tests || []

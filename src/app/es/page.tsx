@@ -110,6 +110,7 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
             startDate: true,
             hostingRequestId: true,
             slug: true,
+            trialEvents: true,
           },
         },
         events: {
@@ -259,14 +260,81 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
     events.forEach(e => tdEventIds.add(e.id))
   }
 
+  // Parse trial events from tournament configurations (needed for test organization)
+  const tournamentTrialEventNamesByTournament = new Map<string, Array<{ name: string; division?: 'B' | 'C' }>>()
+  for (const membership of staffMemberships) {
+    if (membership.tournament.trialEvents) {
+      try {
+        const parsed = JSON.parse(membership.tournament.trialEvents)
+        if (Array.isArray(parsed)) {
+          // Handle both old format (string[]) and new format ({ name, division }[])
+          if (parsed.length > 0 && typeof parsed[0] === 'string') {
+            // Old format - convert to new format
+            tournamentTrialEventNamesByTournament.set(
+              membership.tournament.id,
+              parsed.map((name: string) => ({ name }))
+            )
+          } else {
+            // New format
+            tournamentTrialEventNamesByTournament.set(
+              membership.tournament.id,
+              parsed.map((e: any) => ({ name: e.name, division: e.division }))
+            )
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing tournament trial events:', e)
+      }
+    }
+  }
+
+  // Create a map to check if user has access to a trial event in a tournament
+  // For TDs: access to all trial events in their tournament
+  // For ES: access only to trial events they're assigned to
+  const userTrialEventAccess = new Map<string, Set<string>>() // tournamentId -> Set<trialEventName>
+  for (const membership of staffMemberships) {
+    const tournamentId = membership.tournament.id
+    if (!userTrialEventAccess.has(tournamentId)) {
+      userTrialEventAccess.set(tournamentId, new Set())
+    }
+    const accessSet = userTrialEventAccess.get(tournamentId)!
+    
+    if (membership.role === 'TOURNAMENT_DIRECTOR') {
+      // TDs have access to all trial events in their tournament
+      const allTrialEvents = tournamentTrialEventNamesByTournament.get(tournamentId) || []
+      allTrialEvents.forEach(te => accessSet.add(te.name))
+    } else {
+      // ES members have access only to trial events they're assigned to
+      if (membership.trialEvents) {
+        try {
+          const parsed = JSON.parse(membership.trialEvents)
+          if (Array.isArray(parsed)) {
+            const trialEventNames = parsed.length > 0 && typeof parsed[0] === 'string'
+              ? parsed
+              : parsed.map((e: any) => e.name)
+            trialEventNames.forEach((name: string) => accessSet.add(name))
+          }
+        } catch (e) {
+          console.error('Error parsing staff trial events:', e)
+        }
+      }
+    }
+  }
+
   // Combine ES assigned events and TD all events
   const allUserEventIds = new Set([...userEventIds, ...tdEventIds])
   const eventIdsArray = Array.from(allUserEventIds)
   
-  const allTests = eventIdsArray.length > 0 ? await prisma.eSTest.findMany({
+  // Fetch tests - include both regular events and trial events (eventId: null)
+  const allTests = await prisma.eSTest.findMany({
     where: {
       tournamentId: { in: tournamentIds },
-      eventId: { in: eventIdsArray },
+      OR: [
+        // Tests with real eventIds
+        ...(eventIdsArray.length > 0 ? [{ eventId: { in: eventIdsArray } }] : []),
+        // Tests with null eventId (trial events)
+        { eventId: null },
+      ],
     },
     include: {
       event: {
@@ -297,25 +365,74 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
       },
     },
     orderBy: { createdAt: 'desc' },
-  }) : []
+  })
+
+  // Fetch eventNames from CREATE audit logs for tests with null eventId (trial events)
+  const testsWithNullEventId = allTests.filter(t => !t.eventId)
+  const testEventNameMap = new Map<string, string>()
+  if (testsWithNullEventId.length > 0) {
+    const testIds = testsWithNullEventId.map(t => t.id)
+    const createAudits = await prisma.eSTestAudit.findMany({
+      where: {
+        testId: { in: testIds },
+        action: 'CREATE',
+      },
+      select: {
+        testId: true,
+        details: true,
+      },
+    })
+    for (const audit of createAudits) {
+      if (audit.details && typeof audit.details === 'object' && 'eventName' in audit.details) {
+        const eventName = (audit.details as any).eventName
+        if (eventName && typeof eventName === 'string') {
+          testEventNameMap.set(audit.testId, eventName)
+        }
+      }
+    }
+  }
 
   // Organize tests by tournament and event
+  // For regular events, use eventId as key
+  // For trial events, use "trial-{eventName}" as key
   const testsByTournament = new Map<string, Map<string, typeof allTests>>()
   
   for (const test of allTests) {
-    if (!test.eventId) continue
-    
     if (!testsByTournament.has(test.tournamentId)) {
       testsByTournament.set(test.tournamentId, new Map())
     }
     const testsByEvent = testsByTournament.get(test.tournamentId)!
     
-    if (!testsByEvent.has(test.eventId)) {
-      testsByEvent.set(test.eventId, [])
+    let eventKey: string
+    if (test.eventId) {
+      // Regular event - use eventId as key
+      eventKey = test.eventId
+    } else {
+      // Trial event - use eventName from audit log
+      const eventName = testEventNameMap.get(test.id)
+      if (eventName) {
+        // Check if user has access to this trial event
+        const userAccess = userTrialEventAccess.get(test.tournamentId)
+        const tournamentTrialEvents = tournamentTrialEventNamesByTournament.get(test.tournamentId) || []
+        const trialEventNames = tournamentTrialEvents.map(te => te.name)
+        
+        if (userAccess && userAccess.has(eventName) && trialEventNames.includes(eventName)) {
+          eventKey = `trial-${eventName}`
+        } else {
+          // Skip if user doesn't have access or event doesn't exist in tournament config
+          continue
+        }
+      } else {
+        // No eventName found in audit log - skip
+        continue
+      }
     }
-    testsByEvent.get(test.eventId)!.push(test)
+    
+    if (!testsByEvent.has(eventKey)) {
+      testsByEvent.set(eventKey, [])
+    }
+    testsByEvent.get(eventKey)!.push(test)
   }
-
 
   // For TDs, get all events for their tournament's division
   const allEventsForTDs = new Map<string, Array<{ id: string; name: string; division: 'B' | 'C' }>>()
@@ -341,7 +458,7 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
     const displayDivision = hostingRequestMap.get(membership.tournament.id) || membership.tournament.division
     
     // For TDs, use all events for the tournament's division; for ES, use assigned events
-    const eventsToShow = membership.role === 'TOURNAMENT_DIRECTOR'
+    const regularEventsToShow = membership.role === 'TOURNAMENT_DIRECTOR'
       ? (allEventsForTDs.get(membership.tournament.id) || []).map(event => ({
           event: {
             id: event.id,
@@ -350,6 +467,59 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
           },
         }))
       : membership.events
+    
+    // For TDs, include all trial events; for ES, include only assigned trial events
+    const trialEventsToShow = (() => {
+      const tournamentTrialEvents = tournamentTrialEventNamesByTournament.get(membership.tournament.id) || []
+      
+      if (membership.role === 'TOURNAMENT_DIRECTOR') {
+        // TDs have access to all trial events in their tournament
+        return tournamentTrialEvents.map(trialEvent => {
+          // Use division from trial event config, or fall back to tournament division
+          const division = trialEvent.division || (membership.tournament.division as 'B' | 'C')
+          return {
+            event: {
+              id: null, // Trial events don't have IDs
+              name: trialEvent.name,
+              division: division,
+            },
+          }
+        })
+      } else {
+        // ES members have access only to trial events they're assigned to
+        const assignedTrialEventNames = new Set<string>()
+        if (membership.trialEvents) {
+          try {
+            const parsed = JSON.parse(membership.trialEvents)
+            if (Array.isArray(parsed)) {
+              const trialEventNames = parsed.length > 0 && typeof parsed[0] === 'string'
+                ? parsed
+                : parsed.map((e: any) => e.name)
+              trialEventNames.forEach((name: string) => assignedTrialEventNames.add(name))
+            }
+          } catch (e) {
+            console.error('Error parsing staff trial events:', e)
+          }
+        }
+        
+        // Filter tournament trial events to only those assigned to this ES
+        return tournamentTrialEvents
+          .filter(trialEvent => assignedTrialEventNames.has(trialEvent.name))
+          .map(trialEvent => {
+            // Use division from trial event config, or fall back to tournament division
+            const division = trialEvent.division || (membership.tournament.division as 'B' | 'C')
+            return {
+              event: {
+                id: null, // Trial events don't have IDs
+                name: trialEvent.name,
+                division: division,
+              },
+            }
+          })
+      }
+    })()
+    
+    const eventsToShow = [...regularEventsToShow, ...trialEventsToShow]
     
     return {
       id: membership.id,
@@ -368,9 +538,11 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
       },
       events: [...eventsToShow].sort((a, b) => a.event.name.localeCompare(b.event.name)).map(e => {
         // Look for tests for this event across ALL tournaments the user has access to
+        // For regular events, use event.id; for trial events, use "trial-{eventName}"
+        const eventKey = e.event.id ? e.event.id : `trial-${e.event.name}`
         let eventTests: typeof allTests = []
         for (const [tournamentId, eventMap] of testsByTournament.entries()) {
-          const testsForEventInTournament = eventMap.get(e.event.id) || []
+          const testsForEventInTournament = eventMap.get(eventKey) || []
           eventTests = [...eventTests, ...testsForEventInTournament]
         }
         

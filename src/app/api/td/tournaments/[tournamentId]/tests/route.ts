@@ -90,12 +90,13 @@ export async function GET(
       return NextResponse.json({ error: 'Only tournament directors can view tests' }, { status: 403 })
     }
 
-    // Get tournament info to get division and eventsRun
+    // Get tournament info to get division, eventsRun, and trialEvents
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
       select: { 
         division: true,
         eventsRun: true,
+        trialEvents: true,
         hostingRequest: {
           select: {
             division: true,
@@ -279,19 +280,78 @@ export async function GET(
       }
     }
 
+    // Get trial events from tournament
+    const trialEvents: Array<{ name: string; division: 'B' | 'C' }> = []
+    if (tournament.trialEvents) {
+      try {
+        const parsed = JSON.parse(tournament.trialEvents)
+        if (Array.isArray(parsed)) {
+          // Handle both old format (string[]) and new format ({ name, division }[])
+          if (parsed.length > 0 && typeof parsed[0] === 'string') {
+            // Old format - use tournament division
+            trialEvents.push(...parsed.map((name: string) => ({ name, division: displayDivision as 'B' | 'C' })))
+          } else {
+            // New format
+            trialEvents.push(...parsed.map((e: any) => ({ name: e.name, division: e.division || displayDivision })))
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing trialEvents:', e)
+      }
+    }
+    const trialEventNames = trialEvents.map(e => e.name)
+    const trialEventDivisionMap = new Map(trialEvents.map(e => [e.name, e.division]))
+
+    // Fetch eventNames from CREATE audit logs for tests with null eventId (trial events)
+    const testsWithNullEventId = allTests.filter(t => !t.eventId)
+    const testEventNameMap = new Map<string, string>()
+    if (testsWithNullEventId.length > 0) {
+      const testIds = testsWithNullEventId.map(t => t.id)
+      const createAudits = await prisma.eSTestAudit.findMany({
+        where: {
+          testId: { in: testIds },
+          action: 'CREATE',
+        },
+        select: {
+          testId: true,
+          details: true,
+        },
+      })
+      for (const audit of createAudits) {
+        if (audit.details && typeof audit.details === 'object' && 'eventName' in audit.details) {
+          const eventName = (audit.details as any).eventName
+          if (eventName && typeof eventName === 'string') {
+            testEventNameMap.set(audit.testId, eventName)
+          }
+        }
+      }
+    }
+
     // Organize tests by event
+    // For regular events, use eventId as key
+    // For trial events, use "trial-{eventName}" as key
     const testsByEvent = new Map<string, typeof allTests>()
     
     for (const test of allTests) {
-      if (!test.eventId) {
-        // Skip tests without event assignment
-        continue
+      let eventKey: string
+      if (test.eventId) {
+        // Regular event - use eventId as key
+        eventKey = test.eventId
+      } else {
+        // Trial event - use eventName from audit log
+        const eventName = testEventNameMap.get(test.id)
+        if (eventName && trialEventNames.includes(eventName)) {
+          eventKey = `trial-${eventName}`
+        } else {
+          // Skip if eventName not found or doesn't match any configured trial event
+          continue
+        }
       }
       
-      if (!testsByEvent.has(test.eventId)) {
-        testsByEvent.set(test.eventId, [])
+      if (!testsByEvent.has(eventKey)) {
+        testsByEvent.set(eventKey, [])
       }
-      testsByEvent.get(test.eventId)!.push(test)
+      testsByEvent.get(eventKey)!.push(test)
     }
 
     // Parse eventsRun to get list of event IDs being run in this tournament
@@ -401,7 +461,60 @@ export async function GET(
       })),
     }))
 
-    return NextResponse.json({ events: eventsWithTests })
+    // Add trial events with their tests
+    const trialEventsWithTests = trialEvents.map(trialEvent => ({
+      event: {
+        id: null,
+        name: trialEvent.name,
+        division: trialEvent.division,
+      },
+      tests: (testsByEvent.get(`trial-${trialEvent.name}`) || []).map(test => ({
+        id: test.id,
+        name: test.name,
+        description: test.description,
+        instructions: test.instructions,
+        durationMinutes: test.durationMinutes,
+        status: test.status,
+        eventId: test.eventId,
+        event: null, // Trial events don't have event relation
+        staff: test.staff ? {
+          id: test.staff.id,
+          name: test.staff.name,
+          email: test.staff.email,
+        } : undefined,
+        createdBy: test.createdBy ? {
+          id: test.createdBy.id,
+          name: test.createdBy.name,
+          email: test.createdBy.email,
+        } : undefined,
+        updatedAt: test.updatedAt.toISOString(),
+        createdAt: test.createdAt.toISOString(),
+        allowNoteSheet: test.allowNoteSheet ?? false,
+        autoApproveNoteSheet: test.autoApproveNoteSheet ?? true,
+        requireOneSitting: (test as any).requireOneSitting ?? true, // Default to true if column doesn't exist
+        questions: test.questions.map(q => ({
+          id: q.id,
+          type: q.type,
+          promptMd: q.promptMd,
+          explanation: q.explanation,
+          points: Number(q.points),
+          order: q.order,
+          options: q.options.map(o => ({
+            id: o.id,
+            label: o.label,
+            isCorrect: o.isCorrect,
+            order: o.order,
+          })),
+        })),
+      })),
+    }))
+
+    // Combine regular events and trial events, sorted by name
+    const allEventsWithTests = [...eventsWithTests, ...trialEventsWithTests].sort((a, b) => 
+      a.event.name.localeCompare(b.event.name)
+    )
+
+    return NextResponse.json({ events: allEventsWithTests })
   } catch (error) {
     console.error('Error fetching TD tournament tests:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'

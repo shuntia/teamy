@@ -1309,6 +1309,7 @@ export function NewTestBuilder({
             staffId: staffMembershipId,
             tournamentId,
             eventId: initialEventId || undefined,
+            eventName: !initialEventId && eventName ? eventName : undefined, // Include eventName for trial events
             name: payload.name,
             description: payload.description,
             instructions: payload.instructions,

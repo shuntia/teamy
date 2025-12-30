@@ -324,17 +324,21 @@ export function TDTournamentManageClient({
     eventsRun: tournament.eventsRun ? JSON.parse(tournament.eventsRun) as string[] : [],
     trialEvents: tournament.trialEvents ? (() => {
       const parsed = JSON.parse(tournament.trialEvents)
+      // Determine default division for backward compatibility
+      const defaultDivision = tournament.division === 'C' ? 'C' : tournament.division === 'B' ? 'B' : 'C'
       // Handle backward compatibility: convert string[] to { name, division }[]
       if (Array.isArray(parsed) && parsed.length > 0) {
         if (typeof parsed[0] === 'string') {
-          return parsed.map((name: string) => ({ name, division: 'B' }))
+          return parsed.map((name: string) => ({ name, division: defaultDivision }))
         }
         return parsed as Array<{ name: string; division: string }>
       }
       return [] as Array<{ name: string; division: string }>
     })() : [],
   })
-  const [newTrialEvent, setNewTrialEvent] = useState({ name: '', division: 'B' })
+  // Determine default division for new trial events based on tournament division
+  const defaultTrialEventDivision = tournament.division === 'C' ? 'C' : tournament.division === 'B' ? 'B' : 'C'
+  const [newTrialEvent, setNewTrialEvent] = useState({ name: '', division: defaultTrialEventDivision })
   const [newDiscount, setNewDiscount] = useState({ condition: '', amount: '' })
   const [hoveredTestBadge, setHoveredTestBadge] = useState<string | null>(null)
 
@@ -428,10 +432,18 @@ export function TDTournamentManageClient({
   // Check if tournament is B&C
   const isBCTournament = tournament.division === 'B&C' || (typeof tournament.division === 'string' && tournament.division.includes('B') && tournament.division.includes('C'))
   
+  // Determine default division for trial events based on tournament division
+  const getDefaultTrialEventDivision = (): 'B' | 'C' => {
+    if (tournament.division === 'C') return 'C'
+    if (tournament.division === 'B') return 'B'
+    // For B&C tournaments, default to C
+    return 'C'
+  }
+  
   // For backward compatibility, convert old trial events format (string[]) to new format ({ name, division }[])
   const normalizedTrialEvents = settingsForm.trialEvents.map(event => {
     if (typeof event === 'string') {
-      return { name: event, division: 'B' } // Default to B for old entries
+      return { name: event, division: getDefaultTrialEventDivision() } // Use tournament's default division
     }
     return event
   })
@@ -2064,7 +2076,10 @@ export function TDTournamentManageClient({
               </CardHeader>
               <CardContent>
                 {loadingEvents ? (
-                  <p className="text-muted-foreground text-center py-8">Loading events and tests...</p>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin" />
+                    <p>Loading events and tests...</p>
+                  </div>
                 ) : eventsWithTests.length === 0 ? (
                   <div className="text-center py-8">
                     <ClipboardList className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
@@ -2102,24 +2117,26 @@ export function TDTournamentManageClient({
                         <SelectContent>
                           <SelectItem value="all">All Events</SelectItem>
                           {[...eventsWithTests]
+                            .filter(({ event }) => event.id !== null) // Exclude trial events
                             .sort((a, b) => a.event.name.localeCompare(b.event.name))
                             .map(({ event }) => (
                               <SelectItem key={event.id} value={event.id}>
                                 {event.name}
                               </SelectItem>
                             ))}
-                          {normalizedTrialEvents.length > 0 && (
-                            normalizedTrialEvents.map((trialEvent, index) => (
-                              <SelectItem key={`trial-${index}`} value={`trial-${trialEvent.name}`}>
-                                {trialEvent.name} (Trial)
+                          {[...eventsWithTests]
+                            .filter(({ event }) => event.id === null) // Only trial events
+                            .sort((a, b) => a.event.name.localeCompare(b.event.name))
+                            .map(({ event }) => (
+                              <SelectItem key={`trial-${event.name}`} value={`trial-${event.name}`}>
+                                {event.name} (Trial)
                               </SelectItem>
-                            ))
-                          )}
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
 
-                    {/* Events and Tests */}
+                    {/* All Events (Regular and Trial) - Sorted Alphabetically */}
                     {[...eventsWithTests]
                       .sort((a, b) => a.event.name.localeCompare(b.event.name))
                       .filter(({ event, tests }) => {
@@ -2127,14 +2144,18 @@ export function TDTournamentManageClient({
                         if (isBCTournament && divisionFilter !== 'all' && event.division !== divisionFilter) {
                           return false
                         }
-                        // Filter by selected event (handle trial events)
+                        // Filter by selected event (handle both regular and trial events)
                         if (eventFilter !== 'all') {
-                          if (eventFilter.startsWith('trial-')) {
-                            // If filtering by trial event, skip regular events
-                            return false
-                          }
-                          if (event.id !== eventFilter) {
-                            return false
+                          if (event.id === null) {
+                            // Trial event
+                            if (eventFilter !== `trial-${event.name}`) {
+                              return false
+                            }
+                          } else {
+                            // Regular event
+                            if (eventFilter !== event.id) {
+                              return false
+                            }
                           }
                         }
                         // Show event if it has tests matching search query or no search query
@@ -2144,6 +2165,7 @@ export function TDTournamentManageClient({
                         )
                       })
                       .map(({ event, tests }) => {
+                        const isTrialEvent = event.id === null
                         // Filter tests by search query
                         const filteredTests = tests.filter((test) => {
                           if (!searchQuery) return true
@@ -2155,12 +2177,19 @@ export function TDTournamentManageClient({
                           return null
                         }
 
+                        const eventKey = isTrialEvent ? `trial-${event.name}` : event.id
+
                         return (
-                          <div key={event.id} className="space-y-3">
+                          <div key={eventKey} className="space-y-3">
                             <div className="flex items-center justify-between pb-2 border-b border-border">
                               <div>
                                 <div className="flex items-center gap-2">
                                   <h3 className="font-semibold text-lg">{event.name}</h3>
+                                  {isTrialEvent && (
+                                    <Badge variant="outline" className="text-xs bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-400">
+                                      Trial
+                                    </Badge>
+                                  )}
                                   {tournament.division === 'B&C' && (
                                     <Badge variant="outline" className="text-xs">
                                       Div {event.division}
@@ -2177,7 +2206,11 @@ export function TDTournamentManageClient({
                               <Button 
                                 size="sm"
                                 onClick={() => {
-                                  router.push(`/td/tests/new?tournamentId=${tournament.id}&eventId=${event.id}`)
+                                  if (isTrialEvent) {
+                                    router.push(`/td/tests/new?tournamentId=${tournament.id}&trialEventName=${encodeURIComponent(event.name)}&trialEventDivision=${event.division}`)
+                                  } else {
+                                    router.push(`/td/tests/new?tournamentId=${tournament.id}&eventId=${event.id}`)
+                                  }
                                 }}
                               >
                                 <Plus className="h-4 w-4 mr-2" />
@@ -2190,8 +2223,8 @@ export function TDTournamentManageClient({
                                 <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                                 <p className="text-sm text-muted-foreground">
                                   {searchQuery 
-                                    ? `No tests match "${searchQuery}" for this event.`
-                                    : 'No tests created yet for this event.'}
+                                    ? `No tests match "${searchQuery}" for this ${isTrialEvent ? 'trial ' : ''}event.`
+                                    : `No tests created yet for this ${isTrialEvent ? 'trial ' : ''}event.`}
                                 </p>
                               </div>
                             ) : (
@@ -2282,66 +2315,21 @@ export function TDTournamentManageClient({
                       })
                       .filter(Boolean)}
                     
-                    {/* Trial Events */}
-                    {normalizedTrialEvents.length > 0 && (
-                      normalizedTrialEvents
-                        .filter((trialEvent) => {
-                          // Filter by division (only for B&C tournaments)
-                          if (isBCTournament && divisionFilter !== 'all' && trialEvent.division !== divisionFilter) {
-                            return false
-                          }
-                          // Filter by selected event
-                          if (eventFilter !== 'all') {
-                            if (eventFilter === `trial-${trialEvent.name}`) {
-                              return true
-                            }
-                            return false
-                          }
-                          return true
-                        })
-                        .map((trialEvent, index) => (
-                          <div key={`trial-${index}`} className="space-y-3">
-                            <div className="flex items-center justify-between pb-2 border-b border-border">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-semibold text-lg">{trialEvent.name}</h3>
-                                  <Badge variant="outline" className="text-xs bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-400">
-                                    Trial
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs">
-                                    Div {trialEvent.division}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground">
-                                  Trial event
-                                </p>
-                              </div>
-                              <Button
-                                variant="outline"
-                                onClick={() => {
-                                  router.push(`/td/tests/new?tournamentId=${tournament.id}&trialEventName=${encodeURIComponent(trialEvent.name)}&trialEventDivision=${trialEvent.division}`)
-                                }}
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Create Test
-                              </Button>
-                            </div>
-                            {/* Show message if no tests exist for this trial event */}
-                            <div className="text-center py-6 bg-muted/50 rounded-lg border border-border">
-                              <FileText className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
-                              <p className="text-sm text-muted-foreground">
-                                No tests created yet for this trial event.
-                              </p>
-                            </div>
-                          </div>
-                        ))
-                    )}
-                    
                     {/* Show message if no events match filters */}
                     {[...eventsWithTests]
                       .filter(({ event, tests }) => {
-                        if (eventFilter !== 'all' && event.id !== eventFilter) {
-                          return false
+                        if (eventFilter !== 'all') {
+                          if (event.id === null) {
+                            // Trial event
+                            if (eventFilter !== `trial-${event.name}`) {
+                              return false
+                            }
+                          } else {
+                            // Regular event
+                            if (eventFilter !== event.id) {
+                              return false
+                            }
+                          }
                         }
                         if (!searchQuery) return true
                         const filteredTests = tests.filter((test) =>
@@ -3074,7 +3062,7 @@ export function TDTournamentManageClient({
                                     ...prev,
                                     trialEvents: [...prev.trialEvents, { name: newTrialEvent.name.trim(), division: newTrialEvent.division }]
                                   }))
-                                  setNewTrialEvent({ name: '', division: 'B' })
+                                  setNewTrialEvent({ name: '', division: defaultTrialEventDivision })
                                 }
                               }}
                               className="flex-1"
@@ -3103,7 +3091,7 @@ export function TDTournamentManageClient({
                                     ...prev,
                                     trialEvents: [...prev.trialEvents, { name: newTrialEvent.name.trim(), division: newTrialEvent.division }]
                                   }))
-                                  setNewTrialEvent({ name: '', division: 'B' })
+                                  setNewTrialEvent({ name: '', division: defaultTrialEventDivision })
                                 }
                               }}
                               disabled={!newTrialEvent.name.trim()}
