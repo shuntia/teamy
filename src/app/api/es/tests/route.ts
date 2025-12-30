@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { CalculatorType } from '@prisma/client'
+import { CalculatorType, Division } from '@prisma/client'
 
 // Helper to check if user is a tournament director for a tournament
 async function isTournamentDirector(userId: string, userEmail: string, tournamentId: string): Promise<boolean> {
@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
     const tdEventIds = new Set<string>()
     for (const [tournamentId, division] of tournamentDivisions.entries()) {
       // Fetch events matching the division (handle "B&C" as both B and C)
-      const divisionsToFetch = division === 'B&C' ? ['B', 'C'] : [division]
+      const divisionsToFetch: Division[] = division === 'B&C' ? [Division.B, Division.C] : [division as Division]
       const events = await prisma.event.findMany({
         where: {
           division: { in: divisionsToFetch },
