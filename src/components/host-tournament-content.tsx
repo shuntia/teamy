@@ -1,7 +1,20 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Trophy, Plus, Loader2, CheckCircle2, LogIn } from 'lucide-react'
+import { 
+  Trophy, 
+  Plus, 
+  Loader2, 
+  CheckCircle2, 
+  LogIn, 
+  Users, 
+  Calendar, 
+  FileText, 
+  CreditCard, 
+  BarChart3, 
+  Mail,
+  CheckCircle,
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -303,8 +316,95 @@ export function HostTournamentContent({ isAuthenticated: initialIsAuthenticated 
             Hosting a Tournament
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Host your Science Olympiad tournament on teamy. Our platform streamlines every aspect of tournament management all in one place.
+            Host your Science Olympiad tournament on Teamy. Our platform streamlines every aspect of tournament management, all in one place.
           </p>
+        </div>
+
+        {/* Features Section */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-teamy-primary/10 rounded-lg">
+                  <Users className="h-5 w-5 text-teamy-primary" />
+                </div>
+                <h3 className="font-semibold">Team Registration</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Automated team registration with customizable forms and capacity limits. Track team details, roster sizes, and contact information.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-teamy-primary/10 rounded-lg">
+                  <CreditCard className="h-5 w-5 text-teamy-primary" />
+                </div>
+                <h3 className="font-semibold">Payment Processing</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Secure payment collection through Stripe. Teamy handles all registration fees with a 5% processing fee (includes Stripe fees).
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-teamy-primary/10 rounded-lg">
+                  <Calendar className="h-5 w-5 text-teamy-primary" />
+                </div>
+                <h3 className="font-semibold">Event Scheduling</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Create detailed schedules with time blocks, room assignments, and conflict detection for hybrid events.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-teamy-primary/10 rounded-lg">
+                  <FileText className="h-5 w-5 text-teamy-primary" />
+                </div>
+                <h3 className="font-semibold">Document Management</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Centralized hub for tournament rules, waivers, schedules, and other important documents accessible to all teams.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-teamy-primary/10 rounded-lg">
+                  <Mail className="h-5 w-5 text-teamy-primary" />
+                </div>
+                <h3 className="font-semibold">Communication Tools</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Send announcements, updates, and reminders to all registered teams through integrated email notifications.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-teamy-primary/10 rounded-lg">
+                  <BarChart3 className="h-5 w-5 text-teamy-primary" />
+                </div>
+                <h3 className="font-semibold">Live Results & Scoring</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Real-time score entry and results display. Automatically calculate rankings and generate scoresheets for awards ceremonies.
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Demo Video Coming Soon */}
