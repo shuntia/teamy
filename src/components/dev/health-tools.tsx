@@ -32,6 +32,9 @@ import {
   Loader2,
   Download,
   Trash2,
+  Shield,
+  Plus,
+  Mail,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -116,12 +119,12 @@ export function HealthTools() {
 
   // Loading states
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'all' | 'api' | 'errors' | 'users'>(() => {
+  const [activeTab, setActiveTab] = useState<'all' | 'api' | 'errors' | 'users' | 'access'>(() => {
     // Load saved tab from localStorage, default to 'all'
     if (typeof window !== 'undefined') {
       const savedTab = localStorage.getItem('dev-tools-active-tab')
-      if (savedTab && ['all', 'api', 'errors', 'users'].includes(savedTab)) {
-        return savedTab as 'all' | 'api' | 'errors' | 'users'
+      if (savedTab && ['all', 'api', 'errors', 'users', 'access'].includes(savedTab)) {
+        return savedTab as 'all' | 'api' | 'errors' | 'users' | 'access'
       }
     }
     return 'all'
@@ -149,6 +152,12 @@ export function HealthTools() {
   const [userLoading, setUserLoading] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<any>(null)
+
+  // Email whitelist
+  const [whitelistEmails, setWhitelistEmails] = useState<Array<{ email: string; name: string | null; image: string | null }>>([])
+  const [newEmail, setNewEmail] = useState('')
+  const [whitelistLoading, setWhitelistLoading] = useState(false)
+  const [whitelistSaving, setWhitelistSaving] = useState(false)
 
 
   // Scroll detection for pausing auto-refresh
@@ -277,6 +286,102 @@ export function HealthTools() {
     }
   }, [userSearch, activeTab])
 
+  // Fetch email whitelist
+  const fetchWhitelist = useCallback(async () => {
+    if (activeTab !== 'access') return
+    
+    setWhitelistLoading(true)
+    try {
+      const response = await fetch('/api/dev/email-whitelist')
+      const data = await response.json()
+      if (data.emails) {
+        setWhitelistEmails(data.emails)
+      }
+    } catch (error) {
+      console.error('Failed to fetch email whitelist:', error)
+    } finally {
+      setWhitelistLoading(false)
+    }
+  }, [activeTab])
+
+  // Internal fetch function for use after saving (doesn't check activeTab)
+  const refetchWhitelist = useCallback(async () => {
+    try {
+      const response = await fetch('/api/dev/email-whitelist')
+      const data = await response.json()
+      if (data.emails) {
+        setWhitelistEmails(data.emails)
+      }
+    } catch (error) {
+      console.error('Failed to refetch email whitelist:', error)
+    }
+  }, [])
+
+  // Save email whitelist
+  const saveWhitelist = useCallback(async (emails: string[]) => {
+    setWhitelistSaving(true)
+    try {
+      const response = await fetch('/api/dev/email-whitelist', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ emails }),
+      })
+
+      const data = await response.json()
+      if (response.ok && data.success) {
+        // Refetch to get updated user info
+        await refetchWhitelist()
+        return true
+      } else {
+        alert(data.error || 'Failed to save whitelist')
+        return false
+      }
+    } catch (error) {
+      console.error('Failed to save email whitelist:', error)
+      alert('Failed to save whitelist')
+      return false
+    } finally {
+      setWhitelistSaving(false)
+    }
+  }, [refetchWhitelist])
+
+  // Add email to whitelist
+  const handleAddEmail = async () => {
+    const email = newEmail.trim().toLowerCase()
+    if (!email || !email.includes('@')) {
+      alert('Please enter a valid email address')
+      return
+    }
+
+    if (whitelistEmails.some(e => e.email.toLowerCase() === email)) {
+      alert('Email already in whitelist')
+      setNewEmail('')
+      return
+    }
+
+    const emailList = whitelistEmails.map(e => e.email)
+    emailList.push(email)
+    const success = await saveWhitelist(emailList)
+    if (success) {
+      setNewEmail('')
+    }
+  }
+
+  // Remove email from whitelist
+  const handleRemoveEmail = async (emailToRemove: string) => {
+    if (whitelistEmails.length <= 1) {
+      alert('Cannot remove all emails from whitelist')
+      return
+    }
+
+    const emailList = whitelistEmails
+      .filter((item) => item.email !== emailToRemove)
+      .map(e => e.email)
+    await saveWhitelist(emailList)
+  }
+
 
   // Save active tab to localStorage whenever it changes
   useEffect(() => {
@@ -289,10 +394,12 @@ export function HealthTools() {
   useEffect(() => {
     if (activeTab === 'users') {
       fetchUsers()
+    } else if (activeTab === 'access') {
+      fetchWhitelist()
     } else {
       fetchLogs()
     }
-  }, [activeTab])
+  }, [activeTab, fetchUsers, fetchWhitelist, fetchLogs])
 
   // Fetch when filters change (debounced search)
   useEffect(() => {
@@ -544,7 +651,7 @@ export function HealthTools() {
   return (
     <div className="space-y-6 animate-fade-in">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="all" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
             All Logs
@@ -560,6 +667,10 @@ export function HealthTools() {
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Users
+          </TabsTrigger>
+          <TabsTrigger value="access" className="flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            Access Control
           </TabsTrigger>
         </TabsList>
 
@@ -1146,6 +1257,107 @@ export function HealthTools() {
                   </div>
                 )}
               </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Access Control Tab */}
+        <TabsContent value="access" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Dev Panel Email Whitelist</CardTitle>
+                  <CardDescription>
+                    Manage which email addresses are authorized to access the dev panel
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={fetchWhitelist} disabled={whitelistLoading || whitelistSaving}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${whitelistLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Add Email Form */}
+              <div className="p-4 border rounded-xl bg-muted/30 backdrop-blur-sm">
+                <Label className="text-sm font-medium mb-2 block">Add Email to Whitelist</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="Enter email address"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleAddEmail()
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={handleAddEmail} 
+                    disabled={whitelistSaving || !newEmail.trim()}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Email List */}
+              <ScrollArea className="h-[600px]">
+                {whitelistLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : whitelistEmails.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No emails in whitelist
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {whitelistEmails.map((item) => (
+                      <div
+                        key={item.email}
+                        className="flex items-center justify-between p-4 border rounded-xl hover:bg-muted/50 transition-all duration-200 hover:shadow-md"
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={item.image || ''} alt={item.name || item.email} />
+                            <AvatarFallback>
+                              {item.name?.charAt(0) || item.email.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col">
+                            {item.name && (
+                              <span className="text-sm font-medium">{item.name}</span>
+                            )}
+                            <span className="text-sm text-muted-foreground">{item.email}</span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleRemoveEmail(item.email)}
+                          disabled={whitelistSaving || whitelistEmails.length <= 1}
+                          title={whitelistEmails.length <= 1 ? 'Cannot remove all emails' : 'Remove email'}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+
+              {whitelistSaving && (
+                <div className="flex items-center justify-center py-2">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-sm text-muted-foreground">Saving...</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

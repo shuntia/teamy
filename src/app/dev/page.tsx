@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession, signIn, signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { AlertTriangle, FileText, Shield, CreditCard, LogOut, Trophy, ChevronDown, Mail, BarChart3, BookOpen, Megaphone } from 'lucide-react'
+import { SignInButton } from '@/components/signin-button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,140 +54,58 @@ export default function DevPage() {
     }
     return 'analytics'
   })
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('dev_auth') === 'true'
-    }
-    return false
-  })
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
-  const [password, setPassword] = useState('')
   const [errorDialogOpen, setErrorDialogOpen] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
-  const [failedAttempts, setFailedAttempts] = useState(0)
-  const [lockoutEndTime, setLockoutEndTime] = useState<number | null>(null)
-  const [remainingTime, setRemainingTime] = useState(0)
 
-  // Check for existing lockout on mount
+  const { data: session, status } = useSession()
+
+  // Check authentication status
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedLockout = localStorage.getItem('dev_lockout_end')
-      const storedAttempts = localStorage.getItem('dev_failed_attempts')
-      
-      if (storedLockout) {
-        const lockoutEnd = parseInt(storedLockout)
-        if (lockoutEnd > Date.now()) {
-          setLockoutEndTime(lockoutEnd)
-          setFailedAttempts(parseInt(storedAttempts || '3'))
-        } else {
-          // Lockout expired, clear it
-          localStorage.removeItem('dev_lockout_end')
-          localStorage.removeItem('dev_failed_attempts')
-        }
-      } else if (storedAttempts) {
-        setFailedAttempts(parseInt(storedAttempts))
-      }
-    }
-  }, [])
-
-  // Update remaining time every second when locked out
-  useEffect(() => {
-    if (lockoutEndTime) {
-      const interval = setInterval(() => {
-        const remaining = Math.max(0, Math.ceil((lockoutEndTime - Date.now()) / 1000))
-        setRemainingTime(remaining)
-        
-        if (remaining === 0) {
-          setLockoutEndTime(null)
-          setFailedAttempts(0)
-          localStorage.removeItem('dev_lockout_end')
-          localStorage.removeItem('dev_failed_attempts')
-        }
-      }, 1000)
-      
-      // Initial update
-      const remaining = Math.max(0, Math.ceil((lockoutEndTime - Date.now()) / 1000))
-      setRemainingTime(remaining)
-      
-      return () => clearInterval(interval)
-    }
-  }, [lockoutEndTime])
-
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Check if locked out
-    if (lockoutEndTime && lockoutEndTime > Date.now()) {
+    if (status === 'loading') {
+      setIsCheckingAuth(true)
       return
     }
-    
-    setIsVerifying(true)
-    
-    try {
-      const response = await fetch('/api/dev/auth', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password }),
-      })
 
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        setIsAuthenticated(true)
-        sessionStorage.setItem('dev_auth', 'true')
-        setPassword('')
-        // Reset failed attempts on success
-        setFailedAttempts(0)
-        localStorage.removeItem('dev_failed_attempts')
-        localStorage.removeItem('dev_lockout_end')
-      } else {
-        if (data.debug) {
-          console.error('Password verification failed:', data.debug)
-        }
-        
-        const newAttempts = failedAttempts + 1
-        setFailedAttempts(newAttempts)
-        localStorage.setItem('dev_failed_attempts', newAttempts.toString())
-        
-        // Lock out after 3 failed attempts
-        if (newAttempts >= 3) {
-          const lockoutEnd = Date.now() + 60000 // 1 minute from now
-          setLockoutEndTime(lockoutEnd)
-          localStorage.setItem('dev_lockout_end', lockoutEnd.toString())
-        }
-        
-        setErrorDialogOpen(true)
-        setPassword('')
-      }
-    } catch (error) {
-      console.error('Error verifying password:', error)
-      
-      const newAttempts = failedAttempts + 1
-      setFailedAttempts(newAttempts)
-      localStorage.setItem('dev_failed_attempts', newAttempts.toString())
-      
-      if (newAttempts >= 3) {
-        const lockoutEnd = Date.now() + 60000
-        setLockoutEndTime(lockoutEnd)
-        localStorage.setItem('dev_lockout_end', lockoutEnd.toString())
-      }
-      
-      setErrorDialogOpen(true)
-      setPassword('')
-    } finally {
-      setIsVerifying(false)
+    if (status === 'unauthenticated' || !session?.user?.email) {
+      setIsAuthenticated(false)
+      setIsCheckingAuth(false)
+      return
     }
-  }
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const authStatus = sessionStorage.getItem('dev_auth') === 'true'
-      setIsAuthenticated(authStatus)
+    // Verify email is in whitelist
+    const verifyAccess = async () => {
+      setIsVerifying(true)
+      try {
+        const response = await fetch('/api/dev/auth', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+
+        const data = await response.json()
+
+        if (response.ok && data.success) {
+          setIsAuthenticated(true)
+        } else {
+          setIsAuthenticated(false)
+          if (response.status === 403) {
+            setErrorDialogOpen(true)
+          }
+        }
+      } catch (error) {
+        console.error('Error verifying access:', error)
+        setIsAuthenticated(false)
+      } finally {
+        setIsVerifying(false)
+        setIsCheckingAuth(false)
+      }
     }
-    setIsCheckingAuth(false)
-  }, [])
+
+    verifyAccess()
+  }, [session, status])
 
   // Save active section to localStorage whenever it changes
   useEffect(() => {
@@ -225,59 +144,23 @@ export default function DevPage() {
               <div className="text-center space-y-2">
                 <h1 className="text-3xl font-bold">Dev Access</h1>
                 <p className="text-muted-foreground">
-                  Enter your development password to continue
+                  Sign in with Google to access the dev panel
                 </p>
               </div>
 
-              {lockoutEndTime && lockoutEndTime > Date.now() ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-destructive">
-                          Too many failed attempts
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Please wait {remainingTime} second{remainingTime !== 1 ? 's' : ''} before trying again.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+              <div className="space-y-4">
+                {status === 'loading' || isVerifying ? (
                   <Button 
                     type="button" 
                     className="w-full h-12"
                     disabled
                   >
-                    Locked Out ({remainingTime}s)
+                    Verifying access...
                   </Button>
-                </div>
-              ) : (
-                <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                  {failedAttempts > 0 && failedAttempts < 3 && (
-                    <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                      <p className="text-sm text-yellow-600 dark:text-yellow-400 text-center">
-                        {3 - failedAttempts} attempt{3 - failedAttempts !== 1 ? 's' : ''} remaining before lockout
-                      </p>
-                    </div>
-                  )}
-                  <Input
-                    type="password"
-                    placeholder="Enter password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="h-12"
-                  />
-                  <Button 
-                    type="submit" 
-                    className="w-full h-12"
-                    disabled={isVerifying}
-                  >
-                    {isVerifying ? 'Verifying...' : 'Access Dev Panel'}
-                  </Button>
-                </form>
-              )}
+                ) : (
+                  <SignInButton callbackUrl="/dev" />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -291,24 +174,16 @@ export default function DevPage() {
                   <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
                 </div>
                 <DialogTitle>
-                  {failedAttempts >= 3 ? 'Account Locked' : 'Incorrect Password'}
+                  Access Denied
                 </DialogTitle>
               </div>
               <DialogDescription className="pt-2">
-                {failedAttempts >= 3 ? (
-                  <>
-                    Too many failed attempts. You have been locked out for 1 minute.
-                  </>
-                ) : (
-                  <>
-                    The password you entered is incorrect. You have {3 - failedAttempts} attempt{3 - failedAttempts !== 1 ? 's' : ''} remaining.
-                  </>
-                )}
+                Your email is not authorized to access the dev panel. Please contact an administrator to request access.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button onClick={() => setErrorDialogOpen(false)}>
-                {failedAttempts >= 3 ? 'Close' : 'Try Again'}
+                Close
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -341,8 +216,7 @@ export default function DevPage() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem
                   onClick={() => {
-                    setIsAuthenticated(false)
-                    sessionStorage.removeItem('dev_auth')
+                    signOut({ callbackUrl: '/dev' })
                   }}
                   className="text-red-600 focus:text-red-600"
                 >
