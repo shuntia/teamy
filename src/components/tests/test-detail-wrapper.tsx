@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -43,7 +44,37 @@ export function TestDetailWrapper({
   deliverySettingsContent,
   assignmentContent,
 }: TestDetailWrapperProps) {
-  const [activeView, setActiveView] = useState<'test' | 'attempts'>('test')
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  
+  // Initialize activeView from URL query parameter, default to 'test'
+  const viewParam = searchParams.get('view')
+  const [activeView, setActiveView] = useState<'test' | 'attempts'>(
+    (viewParam === 'attempts' || viewParam === 'test') ? viewParam : 'test'
+  )
+
+  // Sync state with URL params when they change (e.g., browser back/forward)
+  useEffect(() => {
+    const currentViewParam = searchParams.get('view')
+    const newView = (currentViewParam === 'attempts' || currentViewParam === 'test') 
+      ? currentViewParam 
+      : 'test'
+    setActiveView(newView)
+  }, [searchParams])
+
+  // Update URL when view changes
+  const handleViewChange = (view: 'test' | 'attempts') => {
+    setActiveView(view)
+    const params = new URLSearchParams(searchParams.toString())
+    if (view === 'test') {
+      params.delete('view')
+    } else {
+      params.set('view', view)
+    }
+    const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname
+    router.push(newUrl, { scroll: false })
+  }
 
   return (
     <div className="space-y-6">
@@ -51,13 +82,13 @@ export function TestDetailWrapper({
       <div className="flex gap-2 border-b border-border pb-4">
         <Button
           variant={activeView === 'test' ? 'default' : 'outline'}
-          onClick={() => setActiveView('test')}
+          onClick={() => handleViewChange('test')}
         >
           Test Overview
         </Button>
         <Button
           variant={activeView === 'attempts' ? 'default' : 'outline'}
-          onClick={() => setActiveView('attempts')}
+          onClick={() => handleViewChange('attempts')}
         >
           Attempts
         </Button>

@@ -11,6 +11,22 @@ export default async function BillingPage() {
     redirect('/login?redirect=/dashboard/billing')
   }
 
+  // Get user subscription status
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      subscriptionStatus: true,
+      subscriptionType: true,
+      stripeCustomerId: true,
+      stripeSubscriptionId: true,
+      subscriptionEndsAt: true,
+    },
+  })
+
   // Get all user's clubs (any role can purchase boosts)
   const memberships = await prisma.membership.findMany({
     where: { 
@@ -94,22 +110,6 @@ export default async function BillingPage() {
     boostCount: clubBoostMap[club.id]?.boosts.length || 0,
     boosts: clubBoostMap[club.id]?.boosts || [],
   }))
-
-  // Get user subscription status
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      image: true,
-      subscriptionStatus: true,
-      subscriptionType: true,
-      stripeCustomerId: true,
-      stripeSubscriptionId: true,
-      subscriptionEndsAt: true,
-    },
-  })
 
   // If user has Stripe customer ID but no subscription status, try to sync from Stripe
   if (user?.stripeCustomerId && !user.subscriptionStatus && process.env.STRIPE_SECRET_KEY) {

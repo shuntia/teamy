@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Users, Eye, AlertTriangle, CheckCircle, XCircle, Clock, Info, Save } from 'lucide-react'
+import { Users, Eye, AlertTriangle, CheckCircle, XCircle, Clock, Info, Save, Sparkles, Loader2 } from 'lucide-react'
 import { QuestionPrompt } from '@/components/tests/question-prompt'
 
 interface TestAttemptsViewProps {
@@ -86,6 +86,9 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [gradeEdits, setGradeEdits] = useState<Record<string, GradeEdit>>({})
   const [saving, setSaving] = useState(false)
+  const [aiSuggestions, setAiSuggestions] = useState<Record<string, any>>({})
+  const [loadingAiSuggestions, setLoadingAiSuggestions] = useState(false)
+  const [requestingAiGrading, setRequestingAiGrading] = useState(false)
 
   useEffect(() => {
     fetchAttempts()
@@ -114,7 +117,7 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
     }
   }
 
-  const handleViewDetails = (attempt: Attempt) => {
+  const handleViewDetails = async (attempt: Attempt) => {
     setSelectedAttempt(attempt)
     setDetailDialogOpen(true)
     // Initialize grade edits from current attempt
@@ -127,6 +130,84 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
       }
     })
     setGradeEdits(edits)
+    // Fetch AI suggestions for this attempt
+    await fetchAiSuggestions(attempt.id)
+  }
+
+  const fetchAiSuggestions = async (attemptId: string) => {
+    setLoadingAiSuggestions(true)
+    try {
+      const response = await fetch(`/api/tests/${testId}/attempts/${attemptId}/ai/suggestions`)
+      if (response.ok) {
+        const data = await response.json()
+        // Create a map of answerId -> suggestion
+        const suggestionsMap: Record<string, any> = {}
+        data.suggestions?.forEach((suggestion: any) => {
+          suggestionsMap[suggestion.answerId] = suggestion
+        })
+        setAiSuggestions(suggestionsMap)
+      }
+    } catch (error) {
+      console.error('Failed to fetch AI suggestions:', error)
+      // Don't show error toast, just silently fail
+    } finally {
+      setLoadingAiSuggestions(false)
+    }
+  }
+
+  const handleRequestAiGrading = async (mode: 'single' | 'all', answerId?: string) => {
+    if (!selectedAttempt) return
+
+    setRequestingAiGrading(true)
+    try {
+      const response = await fetch(`/api/tests/${testId}/attempts/${selectedAttempt.id}/ai/grade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, answerId }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to request AI grading')
+      }
+
+      const data = await response.json()
+      
+      // Update suggestions map with new suggestions
+      const updatedSuggestions = { ...aiSuggestions }
+      data.suggestions?.forEach((suggestion: any) => {
+        updatedSuggestions[suggestion.answerId] = suggestion
+      })
+      setAiSuggestions(updatedSuggestions)
+
+      toast({
+        title: 'Success',
+        description: `AI grading suggestions generated for ${data.suggestions?.length || 0} question(s)`,
+      })
+    } catch (error: any) {
+      console.error('Failed to request AI grading:', error)
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to request AI grading',
+        variant: 'destructive',
+      })
+    } finally {
+      setRequestingAiGrading(false)
+    }
+  }
+
+  const handleApplyAiSuggestion = (answerId: string) => {
+    const suggestion = aiSuggestions[answerId]
+    if (!suggestion) return
+
+    setGradeEdits((prev) => ({
+      ...prev,
+      [answerId]: {
+        ...prev[answerId],
+        pointsAwarded: suggestion.suggestedPoints,
+        graderNote: suggestion.explanation || prev[answerId]?.graderNote || '',
+      },
+    }))
   }
 
   const handleGradeEdit = (answerId: string, field: 'pointsAwarded' | 'graderNote', value: number | string) => {
@@ -431,7 +512,13 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
       </Card>
 
       {/* Detail Dialog */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+      <Dialog open={detailDialogOpen} onOpenChange={(open) => {
+        setDetailDialogOpen(open)
+        if (!open) {
+          // Clear AI suggestions when dialog closes
+          setAiSuggestions({})
+        }
+      }}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Attempt Details</DialogTitle>
@@ -553,18 +640,36 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
 
               {/* Answers */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <h3 className="font-semibold text-lg">Responses</h3>
-                  {selectedAttempt.answers.some(a => a.question.type === 'SHORT_TEXT' || a.question.type === 'LONG_TEXT') && (
-                    <Button 
-                      onClick={handleSaveGrades} 
-                      disabled={saving}
-                      className="gap-2"
-                    >
-                      <Save className="h-4 w-4" />
-                      {saving ? 'Saving...' : 'Save Grades'}
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {selectedAttempt.answers.some(a => a.question.type === 'SHORT_TEXT' || a.question.type === 'LONG_TEXT') && (
+                      <>
+                        <Button 
+                          onClick={() => handleRequestAiGrading('all')} 
+                          disabled={requestingAiGrading}
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                        >
+                          {requestingAiGrading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                          {requestingAiGrading ? 'Generating...' : 'AI Grade All'}
+                        </Button>
+                        <Button 
+                          onClick={handleSaveGrades} 
+                          disabled={saving}
+                          className="gap-2"
+                        >
+                          <Save className="h-4 w-4" />
+                          {saving ? 'Saving...' : 'Save Grades'}
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 {selectedAttempt.answers && selectedAttempt.answers.length > 0 ? (
                   selectedAttempt.answers.map((answer, index) => (
@@ -667,12 +772,103 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                               </div>
                             )}
 
+                            {/* AI Suggestion */}
+                            {aiSuggestions[answer.id] && (
+                              <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded border border-purple-200 dark:border-purple-800 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                                    <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">
+                                      AI Suggestion
+                                    </p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleApplyAiSuggestion(answer.id)}
+                                    className="gap-2"
+                                  >
+                                    Apply
+                                  </Button>
+                                </div>
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium">Suggested Score:</span>
+                                    <Badge variant="default" className="bg-purple-600">
+                                      {aiSuggestions[answer.id].suggestedPoints} / {aiSuggestions[answer.id].maxPoints} pts
+                                    </Badge>
+                                  </div>
+                                  {aiSuggestions[answer.id].explanation && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-purple-900 dark:text-purple-100 mb-1">
+                                        Rationale:
+                                      </p>
+                                      <p className="text-sm text-purple-800 dark:text-purple-200">
+                                        {aiSuggestions[answer.id].explanation}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {aiSuggestions[answer.id].strengths && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">
+                                        Strengths:
+                                      </p>
+                                      <p className="text-sm text-purple-800 dark:text-purple-200">
+                                        {aiSuggestions[answer.id].strengths}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {aiSuggestions[answer.id].gaps && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-1">
+                                        Gaps:
+                                      </p>
+                                      <p className="text-sm text-purple-800 dark:text-purple-200">
+                                        {aiSuggestions[answer.id].gaps}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {aiSuggestions[answer.id].rubricAlignment && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-purple-900 dark:text-purple-100 mb-1">
+                                        Rubric Alignment:
+                                      </p>
+                                      <p className="text-sm text-purple-800 dark:text-purple-200">
+                                        {aiSuggestions[answer.id].rubricAlignment}
+                                      </p>
+                                    </div>
+                                  )}
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    Generated: {new Date(aiSuggestions[answer.id].createdAt).toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Grading Interface */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800">
                               <div>
-                                <Label htmlFor={`points-${answer.id}`} className="text-sm font-semibold">
-                                  Points Awarded (max: {answer.question.points})
-                                </Label>
+                                <div className="flex items-center justify-between mb-1">
+                                  <Label htmlFor={`points-${answer.id}`} className="text-sm font-semibold">
+                                    Points Awarded (max: {answer.question.points})
+                                  </Label>
+                                  {!aiSuggestions[answer.id] && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleRequestAiGrading('single', answer.id)}
+                                      disabled={requestingAiGrading}
+                                      className="h-6 px-2 gap-1 text-xs"
+                                    >
+                                      {requestingAiGrading ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Sparkles className="h-3 w-3" />
+                                      )}
+                                      AI Grade
+                                    </Button>
+                                  )}
+                                </div>
                                 <Input
                                   id={`points-${answer.id}`}
                                   type="number"
