@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     })
 
     const totalPromoBoosts = promoBoostRedemptions.reduce((sum, redemption) => {
-      return sum + redemption.promoCode.effectDuration
+      return sum + (redemption.promoCode.effectQuantity || 0)
     }, 0)
 
     // Get Pro subscription boosts (5 included)
