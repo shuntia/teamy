@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
             hostingRequestId: true,
             slug: true,
             trialEvents: true, // Include trial events from tournament
+            createdById: true,
           },
         },
         events: {
@@ -90,6 +91,143 @@ export async function GET(request: NextRequest) {
         },
       },
     })
+
+    // Also check for tournament directors via TournamentAdmin or createdById
+    const tournamentAdmins = await prisma.tournamentAdmin.findMany({
+      where: {
+        userId: session.user.id,
+      },
+      include: {
+        tournament: {
+          select: {
+            id: true,
+            name: true,
+            division: true,
+            startDate: true,
+            hostingRequestId: true,
+            slug: true,
+            trialEvents: true,
+            createdById: true,
+          },
+        },
+      },
+    })
+
+    const createdTournaments = await prisma.tournament.findMany({
+      where: {
+        createdById: session.user.id,
+      },
+      select: {
+        id: true,
+        name: true,
+        division: true,
+        startDate: true,
+        hostingRequestId: true,
+        slug: true,
+        trialEvents: true,
+        createdById: true,
+      },
+    })
+
+    // Also check hosting requests where user is director
+    const directorHostingRequests = await prisma.tournamentHostingRequest.findMany({
+      where: {
+        directorEmail: {
+          equals: session.user.email,
+          mode: 'insensitive',
+        },
+        status: 'APPROVED',
+      },
+      include: {
+        tournament: {
+          select: {
+            id: true,
+            name: true,
+            division: true,
+            startDate: true,
+            hostingRequestId: true,
+            slug: true,
+            trialEvents: true,
+            createdById: true,
+          },
+        },
+      },
+    })
+
+    // Combine all tournament access and create TournamentStaff-like records for TDs
+    const tournamentIdsSet = new Set(staffMemberships.map(m => m.tournament.id))
+    
+    // Add tournaments where user is admin
+    for (const admin of tournamentAdmins) {
+      if (admin.tournament && !tournamentIdsSet.has(admin.tournament.id)) {
+        tournamentIdsSet.add(admin.tournament.id)
+        staffMemberships.push({
+          id: `admin-${admin.id}`,
+          userId: session.user.id,
+          email: session.user.email,
+          name: session.user.name,
+          role: 'TOURNAMENT_DIRECTOR' as const,
+          status: 'ACCEPTED' as const,
+          tournamentId: admin.tournament.id,
+          inviteToken: `admin-${admin.id}-${admin.tournament.id}`, // Required field
+          invitedAt: new Date(),
+          acceptedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          trialEvents: null,
+          tournament: admin.tournament,
+          events: [],
+        } as any)
+      }
+    }
+
+    // Add tournaments created by user
+    for (const tournament of createdTournaments) {
+      if (!tournamentIdsSet.has(tournament.id)) {
+        tournamentIdsSet.add(tournament.id)
+        staffMemberships.push({
+          id: `creator-${tournament.id}`,
+          userId: session.user.id,
+          email: session.user.email,
+          name: session.user.name,
+          role: 'TOURNAMENT_DIRECTOR' as const,
+          status: 'ACCEPTED' as const,
+          tournamentId: tournament.id,
+          inviteToken: `creator-${tournament.id}`, // Required field
+          invitedAt: new Date(),
+          acceptedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          trialEvents: null,
+          tournament: tournament,
+          events: [],
+        } as any)
+      }
+    }
+
+    // Add tournaments from hosting requests
+    for (const request of directorHostingRequests) {
+      if (request.tournament && !tournamentIdsSet.has(request.tournament.id)) {
+        tournamentIdsSet.add(request.tournament.id)
+        staffMemberships.push({
+          id: `hosting-${request.id}`,
+          userId: session.user.id,
+          email: session.user.email,
+          name: session.user.name,
+          role: 'TOURNAMENT_DIRECTOR' as const,
+          status: 'ACCEPTED' as const,
+          tournamentId: request.tournament.id,
+          inviteToken: `hosting-${request.id}`, // Required field
+          invitedAt: new Date(),
+          acceptedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          trialEvents: null,
+          tournament: request.tournament,
+          events: [],
+        } as any)
+      }
+    }
 
     // Get hosting request divisions for all tournaments (needed for TD event fetching)
     const tournamentIds = staffMemberships.map(m => m.tournament.id)
@@ -149,7 +287,10 @@ export async function GET(request: NextRequest) {
       if (membership.role === 'TOURNAMENT_DIRECTOR') {
         // For TDs, we'll fetch all events for the tournament's division
         // TDs can see all trial events for their tournament
-        const division = hostingRequestMap.get(membership.tournament.id) || membership.tournament.division
+        // Convert enum to string if needed
+        const divisionFromHosting = hostingRequestMap.get(membership.tournament.id)
+        const divisionFromTournament = membership.tournament.division
+        const division = divisionFromHosting || (divisionFromTournament === Division.B ? 'B' : divisionFromTournament === Division.C ? 'C' : String(divisionFromTournament))
         tournamentDivisions.set(membership.tournament.id, division as 'B' | 'C' | 'B&C')
       } else {
         // For ES, use assigned events
@@ -201,7 +342,14 @@ export async function GET(request: NextRequest) {
       if (!eventIdsByTournament.has(tournamentId)) {
         eventIdsByTournament.set(tournamentId, new Set())
       }
-      const divisionsToFetch: Division[] = division === 'B&C' ? [Division.B, Division.C] : [division as Division]
+      // Convert string division to enum properly
+      const divisionsToFetch: Division[] = division === 'B&C' 
+        ? [Division.B, Division.C] 
+        : division === 'B' || division === Division.B
+          ? [Division.B]
+          : division === 'C' || division === Division.C
+            ? [Division.C]
+            : [division as Division]
       const events = await prisma.event.findMany({
         where: {
           division: { in: divisionsToFetch },
@@ -366,7 +514,14 @@ export async function GET(request: NextRequest) {
     // For TDs, get all events for their tournament's division
     const allEventsForTDs = new Map<string, Array<{ id: string; name: string; division: 'B' | 'C' }>>()
     for (const [tournamentId, division] of tournamentDivisions.entries()) {
-      const divisionsToFetch: Division[] = division === 'B&C' ? [Division.B, Division.C] : [division as Division]
+      // Convert string division to enum properly
+      const divisionsToFetch: Division[] = division === 'B&C' 
+        ? [Division.B, Division.C] 
+        : division === 'B' || division === Division.B
+          ? [Division.B]
+          : division === 'C' || division === Division.C
+            ? [Division.C]
+            : [division as Division]
       const events = await prisma.event.findMany({
         where: {
           division: { in: divisionsToFetch },
@@ -386,7 +541,10 @@ export async function GET(request: NextRequest) {
     // (not just the membership's tournament) - this enables cross-tournament test visibility
     const staffMembershipsWithTests = staffMemberships.map(membership => {
       // Use hosting request division for display if available (supports "B&C")
-      const displayDivision = hostingRequestMap.get(membership.tournament.id) || membership.tournament.division
+      // Convert enum to string if needed
+      const divisionFromHosting = hostingRequestMap.get(membership.tournament.id)
+      const divisionFromTournament = membership.tournament.division
+      const displayDivision = divisionFromHosting || (divisionFromTournament === Division.B ? 'B' : divisionFromTournament === Division.C ? 'C' : String(divisionFromTournament))
       
       // For TDs, use all events for the tournament's division; for ES, use assigned events
       const eventsToShow = membership.role === 'TOURNAMENT_DIRECTOR'

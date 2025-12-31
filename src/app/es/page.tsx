@@ -112,6 +112,7 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
             hostingRequestId: true,
             slug: true,
             trialEvents: true,
+            createdById: true,
           },
         },
         events: {
@@ -138,6 +139,145 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
       },
     },
   })
+
+  // Also check for tournament directors via TournamentAdmin or createdById
+  // These should also have access to the ES portal
+  const tournamentAdmins = await prisma.tournamentAdmin.findMany({
+    where: {
+      userId: session.user.id,
+    },
+    include: {
+      tournament: {
+        select: {
+          id: true,
+          name: true,
+          division: true,
+          startDate: true,
+          hostingRequestId: true,
+          slug: true,
+          trialEvents: true,
+          createdById: true,
+        },
+      },
+    },
+  })
+
+  const createdTournaments = await prisma.tournament.findMany({
+    where: {
+      createdById: session.user.id,
+    },
+    select: {
+      id: true,
+      name: true,
+      division: true,
+      startDate: true,
+      hostingRequestId: true,
+      slug: true,
+      trialEvents: true,
+      createdById: true,
+    },
+  })
+
+  // Also check hosting requests where user is director
+  const directorHostingRequests = await prisma.tournamentHostingRequest.findMany({
+    where: {
+      directorEmail: {
+        equals: session.user.email,
+        mode: 'insensitive',
+      },
+      status: 'APPROVED',
+    },
+    include: {
+      tournament: {
+        select: {
+          id: true,
+          name: true,
+          division: true,
+          startDate: true,
+          hostingRequestId: true,
+          slug: true,
+          trialEvents: true,
+          createdById: true,
+        },
+      },
+    },
+  })
+
+  // Combine all tournament access and create TournamentStaff-like records for TDs
+  const tournamentIdsSet = new Set(staffMemberships.map(m => m.tournament.id))
+  
+  // Add tournaments where user is admin
+  for (const admin of tournamentAdmins) {
+    if (admin.tournament && !tournamentIdsSet.has(admin.tournament.id)) {
+      tournamentIdsSet.add(admin.tournament.id)
+      // Create a TournamentStaff-like record for TD access
+      staffMemberships.push({
+        id: `admin-${admin.id}`,
+        userId: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: 'TOURNAMENT_DIRECTOR' as const,
+        status: 'ACCEPTED' as const,
+        tournamentId: admin.tournament.id,
+        inviteToken: `admin-${admin.id}-${admin.tournament.id}`, // Required field
+        invitedAt: new Date(),
+        acceptedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        trialEvents: null,
+        tournament: admin.tournament,
+        events: [],
+      } as any)
+    }
+  }
+
+  // Add tournaments created by user
+  for (const tournament of createdTournaments) {
+    if (!tournamentIdsSet.has(tournament.id)) {
+      tournamentIdsSet.add(tournament.id)
+      staffMemberships.push({
+        id: `creator-${tournament.id}`,
+        userId: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: 'TOURNAMENT_DIRECTOR' as const,
+        status: 'ACCEPTED' as const,
+        tournamentId: tournament.id,
+        inviteToken: `creator-${tournament.id}`, // Required field
+        invitedAt: new Date(),
+        acceptedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        trialEvents: null,
+        tournament: tournament,
+        events: [],
+      } as any)
+    }
+  }
+
+  // Add tournaments from hosting requests
+  for (const request of directorHostingRequests) {
+    if (request.tournament && !tournamentIdsSet.has(request.tournament.id)) {
+      tournamentIdsSet.add(request.tournament.id)
+      staffMemberships.push({
+        id: `hosting-${request.id}`,
+        userId: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: 'TOURNAMENT_DIRECTOR' as const,
+        status: 'ACCEPTED' as const,
+        tournamentId: request.tournament.id,
+        inviteToken: `hosting-${request.id}`, // Required field
+        invitedAt: new Date(),
+        acceptedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        trialEvents: null,
+        tournament: request.tournament,
+        events: [],
+      } as any)
+    }
+  }
 
   // If no memberships found, show unauthorized message
   if (staffMemberships.length === 0) {
@@ -239,7 +379,10 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
       // For TDs, we'll fetch all events for the tournament's division
       tdTournamentIds.add(membership.tournament.id)
       // Get division from hosting request if available, otherwise from tournament
-      const division = hostingRequestMap.get(membership.tournament.id) || membership.tournament.division
+      // Convert enum to string if needed
+      const divisionFromHosting = hostingRequestMap.get(membership.tournament.id)
+      const divisionFromTournament = membership.tournament.division
+      const division = divisionFromHosting || (divisionFromTournament === Division.B ? 'B' : divisionFromTournament === Division.C ? 'C' : String(divisionFromTournament))
       tournamentDivisions.set(membership.tournament.id, division as 'B' | 'C' | 'B&C')
     } else {
       // For ES, use assigned events
@@ -251,7 +394,14 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
   const tdEventIds = new Set<string>()
   for (const [tournamentId, division] of tournamentDivisions.entries()) {
     // Fetch events matching the division (handle "B&C" as both B and C)
-    const divisionsToFetch: Division[] = division === 'B&C' ? [Division.B, Division.C] : [division as Division]
+    // Convert string division to enum properly
+    const divisionsToFetch: Division[] = division === 'B&C' 
+      ? [Division.B, Division.C] 
+      : division === 'B' || division === Division.B
+        ? [Division.B]
+        : division === 'C' || division === Division.C
+          ? [Division.C]
+          : [division as Division]
     const events = await prisma.event.findMany({
       where: {
         division: { in: divisionsToFetch },
@@ -344,7 +494,14 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
     if (!eventIdsByTournament.has(tournamentId)) {
       eventIdsByTournament.set(tournamentId, new Set())
     }
-    const divisionsToFetch: Division[] = division === 'B&C' ? [Division.B, Division.C] : [division as Division]
+    // Convert string division to enum properly
+    const divisionsToFetch: Division[] = division === 'B&C' 
+      ? [Division.B, Division.C] 
+      : division === 'B' || division === Division.B
+        ? [Division.B]
+        : division === 'C' || division === Division.C
+          ? [Division.C]
+          : [division as Division]
     const events = await prisma.event.findMany({
       where: {
         division: { in: divisionsToFetch },
@@ -470,7 +627,14 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
   // For TDs, get all events for their tournament's division
   const allEventsForTDs = new Map<string, Array<{ id: string; name: string; division: 'B' | 'C' }>>()
   for (const [tournamentId, division] of tournamentDivisions.entries()) {
-    const divisionsToFetch: Division[] = division === 'B&C' ? [Division.B, Division.C] : [division as Division]
+    // Convert string division to enum properly
+    const divisionsToFetch: Division[] = division === 'B&C' 
+      ? [Division.B, Division.C] 
+      : division === 'B' || division === Division.B
+        ? [Division.B]
+        : division === 'C' || division === Division.C
+          ? [Division.C]
+          : [division as Division]
     const events = await prisma.event.findMany({
       where: {
         division: { in: divisionsToFetch },
@@ -487,8 +651,17 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
 
   // Map staff memberships with tests organized by event
   const staffMembershipsWithTests = staffMemberships.map(membership => {
+    // Ensure membership has required properties
+    if (!membership.tournament) {
+      console.error('Membership missing tournament:', membership.id)
+      return null
+    }
+    
     // Use hosting request division for display if available (supports "B&C")
-    const displayDivision = hostingRequestMap.get(membership.tournament.id) || membership.tournament.division
+    // Convert enum to string if needed
+    const divisionFromHosting = hostingRequestMap.get(membership.tournament.id)
+    const divisionFromTournament = membership.tournament.division
+    const displayDivision = divisionFromHosting || (divisionFromTournament === Division.B ? 'B' : divisionFromTournament === Division.C ? 'C' : String(divisionFromTournament))
     
     // For TDs, use all events for the tournament's division; for ES, use assigned events
     const regularEventsToShow = membership.role === 'TOURNAMENT_DIRECTOR'
@@ -560,8 +733,8 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
       name: membership.name,
       role: membership.role,
       status: membership.status,
-      invitedAt: membership.invitedAt.toISOString(),
-      acceptedAt: membership.acceptedAt?.toISOString() || null,
+      invitedAt: membership.invitedAt instanceof Date ? membership.invitedAt.toISOString() : new Date(membership.invitedAt).toISOString(),
+      acceptedAt: membership.acceptedAt ? (membership.acceptedAt instanceof Date ? membership.acceptedAt.toISOString() : new Date(membership.acceptedAt).toISOString()) : null,
       tournament: {
         id: membership.tournament.id,
         name: membership.tournament.name,
@@ -633,7 +806,8 @@ export default async function ESPortalPage({ searchParams }: ESPortalPageProps) 
   })
 
   // Use the staffMembershipsWithTests that includes server-side fetched tests
-  const serializedStaffMemberships = staffMembershipsWithTests
+  // Filter out any null entries (from error handling)
+  const serializedStaffMemberships = staffMembershipsWithTests.filter((m): m is NonNullable<typeof m> => m !== null)
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-slate-50 dark:bg-slate-900 grid-pattern" />}>
