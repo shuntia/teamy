@@ -78,12 +78,25 @@ export async function POST(request: NextRequest) {
     // Calculate expiration date for the redemption
     let redemptionExpiresAt: Date
     if (promoCode.effectType === 'PRO_SUBSCRIPTION') {
+      if (!promoCode.effectDuration) {
+        return NextResponse.json(
+          { error: 'Invalid promo code configuration' },
+          { status: 500 }
+        )
+      }
       // Duration is in weeks
       redemptionExpiresAt = new Date(now.getTime() + promoCode.effectDuration * 7 * 24 * 60 * 60 * 1000)
     } else {
-      // CLUB_BOOST - Duration is in months
+      // CLUB_BOOST - Store quantity, set far future expiration (boosts don't expire by time, only by use)
+      if (!promoCode.effectQuantity) {
+        return NextResponse.json(
+          { error: 'Invalid promo code configuration' },
+          { status: 500 }
+        )
+      }
+      // Set expiration far in future for club boosts (they're quantity-based, not time-based)
       redemptionExpiresAt = new Date(now)
-      redemptionExpiresAt.setMonth(redemptionExpiresAt.getMonth() + promoCode.effectDuration)
+      redemptionExpiresAt.setFullYear(redemptionExpiresAt.getFullYear() + 10)
     }
 
     // Create redemption and update user/promo code in a transaction
@@ -118,7 +131,7 @@ export async function POST(request: NextRequest) {
         if (user?.subscriptionStatus === 'active' && user?.subscriptionEndsAt && user.subscriptionEndsAt > now) {
           // Extend existing subscription
           const currentEndsAt = new Date(user.subscriptionEndsAt)
-          newSubscriptionEndsAt = new Date(currentEndsAt.getTime() + promoCode.effectDuration * 7 * 24 * 60 * 60 * 1000)
+          newSubscriptionEndsAt = new Date(currentEndsAt.getTime() + promoCode.effectDuration! * 7 * 24 * 60 * 60 * 1000)
         } else {
           // New subscription
           newSubscriptionEndsAt = redemptionExpiresAt
@@ -139,11 +152,11 @@ export async function POST(request: NextRequest) {
 
     let message = ''
     if (promoCode.effectType === 'PRO_SUBSCRIPTION') {
-      const weeks = promoCode.effectDuration
+      const weeks = promoCode.effectDuration!
       message = `Successfully redeemed! You now have ${weeks} week${weeks > 1 ? 's' : ''} of Pro subscription.`
     } else {
-      const months = promoCode.effectDuration
-      message = `Successfully redeemed! You received ${months} month${months > 1 ? 's' : ''} of club boost.`
+      const boosts = promoCode.effectQuantity!
+      message = `Successfully redeemed! You received ${boosts} club boost${boosts > 1 ? 's' : ''} to assign to your clubs.`
     }
 
     return NextResponse.json({

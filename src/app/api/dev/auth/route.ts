@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createAuditLog } from '@/lib/audit-log'
 
 // WARNING: This endpoint is for development only
 // Verify dev panel email whitelist server-side
@@ -60,6 +61,15 @@ export async function POST(request: NextRequest) {
     )
 
     if (isAllowed) {
+      // Log successful login
+      await createAuditLog({
+        userId: session.user.id || userEmail,
+        userEmail: userEmail,
+        userName: session.user.name,
+        action: 'DEV_PANEL_LOGIN',
+        request,
+      })
+
       return NextResponse.json({ success: true, email: userEmail })
     } else {
       return NextResponse.json(

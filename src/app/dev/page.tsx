@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle, FileText, Shield, CreditCard, LogOut, Trophy, ChevronDown, Mail, BarChart3, BookOpen, Megaphone, Tag } from 'lucide-react'
+import { AlertTriangle, FileText, Shield, CreditCard, LogOut, Trophy, ChevronDown, Mail, BarChart3, BookOpen, Megaphone, Tag, History } from 'lucide-react'
 import { SignInButton } from '@/components/signin-button'
 import {
   DropdownMenu,
@@ -27,12 +27,13 @@ import { AnalyticsDashboard } from '@/components/dev/analytics-dashboard'
 import { ResourceRequests } from '@/components/dev/resource-requests'
 import { BannerManager } from '@/components/dev/banner-manager'
 import { PromoCodeManager } from '@/components/dev/promo-code-manager'
+import { AuditLogViewer } from '@/components/dev/audit-log-viewer'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/logo'
 import { ThemeToggle } from '@/components/theme-toggle'
 
-type Section = 'blog' | 'security' | 'tournaments' | 'email' | 'analytics' | 'payments' | 'resources' | 'banner' | 'promo'
+type Section = 'blog' | 'security' | 'tournaments' | 'email' | 'analytics' | 'payments' | 'resources' | 'banner' | 'promo' | 'audit'
 
 const navItems: { id: Section; label: string; icon: React.ElementType }[] = [
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
@@ -42,6 +43,7 @@ const navItems: { id: Section; label: string; icon: React.ElementType }[] = [
   { id: 'tournaments', label: 'Tournaments', icon: Trophy },
   { id: 'resources', label: 'Resources', icon: BookOpen },
   { id: 'promo', label: 'Promo Codes', icon: Tag },
+  { id: 'audit', label: 'Audit Logs', icon: History },
   { id: 'security', label: 'Security', icon: Shield },
   { id: 'payments', label: 'Payments', icon: CreditCard },
 ]
@@ -50,7 +52,7 @@ export default function DevPage() {
   const [activeSection, setActiveSection] = useState<Section>(() => {
     if (typeof window !== 'undefined') {
       const savedSection = localStorage.getItem('dev-panel-active-section') as Section
-      if (savedSection && ['blog', 'security', 'tournaments', 'email', 'analytics', 'payments', 'resources', 'banner', 'promo'].includes(savedSection)) {
+      if (savedSection && ['blog', 'security', 'tournaments', 'email', 'analytics', 'payments', 'resources', 'banner', 'promo', 'audit'].includes(savedSection)) {
         return savedSection
       }
     }
@@ -208,14 +210,38 @@ export default function DevPage() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 outline-none text-white hover:text-white/80 transition-colors">
-                  <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <span className="text-sm font-semibold">D</span>
-                  </div>
-                  <span className="text-sm font-medium hidden sm:block">Developer</span>
+                  {session.user?.image ? (
+                    <img
+                      src={session.user.image}
+                      alt={session.user.name || 'User'}
+                      className="h-8 w-8 rounded-full"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                      <span className="text-sm font-semibold">
+                        {session.user?.name?.charAt(0).toUpperCase() || session.user?.email?.charAt(0).toUpperCase() || 'D'}
+                      </span>
+                    </div>
+                  )}
+                  <span className="text-sm font-medium hidden sm:block">
+                    {session.user?.name || session.user?.email?.split('@')[0] || 'Developer'}
+                  </span>
                   <ChevronDown className="h-4 w-4 text-white/60" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                <div className="px-2 py-1.5 text-sm">
+                  <div className="font-medium">{session.user?.name || 'Developer'}</div>
+                  <div className="text-xs text-muted-foreground truncate">{session.user?.email}</div>
+                </div>
+                <DropdownMenuItem
+                  onClick={() => {
+                    signOut({ callbackUrl: '/' })
+                  }}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Switch Account
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
                     signOut({ callbackUrl: '/dev' })
@@ -281,6 +307,8 @@ export default function DevPage() {
           {activeSection === 'resources' && <ResourceRequests />}
           
           {activeSection === 'promo' && <PromoCodeManager />}
+          
+          {activeSection === 'audit' && <AuditLogViewer />}
           
           {activeSection === 'payments' && (
             <div className="p-8 rounded-xl bg-card border">

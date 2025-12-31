@@ -31,12 +31,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 interface PromoCode {
   id: string
   code: string
   effectType: 'PRO_SUBSCRIPTION' | 'CLUB_BOOST'
-  effectDuration: number
+  effectDuration: number | null
+  effectQuantity: number | null
   activatesAt: string | null
   expiresAt: string | null
   maxRedemptions: number | null
@@ -62,12 +64,15 @@ export function PromoCodeManager() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [selectedPromoCode, setSelectedPromoCode] = useState<PromoCode | null>(null)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [promoCodeToDelete, setPromoCodeToDelete] = useState<string | null>(null)
 
   // Form state
   const [newCode, setNewCode] = useState({
     code: '',
     effectType: 'PRO_SUBSCRIPTION' as 'PRO_SUBSCRIPTION' | 'CLUB_BOOST',
     effectDuration: 1,
+    effectQuantity: 1,
     activatesAt: '',
     expiresAt: '',
     maxRedemptions: '',
@@ -116,10 +121,19 @@ export function PromoCodeManager() {
       return
     }
 
-    if (newCode.effectDuration <= 0) {
+    if (newCode.effectType === 'PRO_SUBSCRIPTION' && newCode.effectDuration <= 0) {
       toast({
         title: 'Error',
         description: 'Duration must be greater than 0',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (newCode.effectType === 'CLUB_BOOST' && newCode.effectQuantity <= 0) {
+      toast({
+        title: 'Error',
+        description: 'Quantity must be greater than 0',
         variant: 'destructive',
       })
       return
@@ -132,7 +146,8 @@ export function PromoCodeManager() {
         body: JSON.stringify({
           code: newCode.code.trim(),
           effectType: newCode.effectType,
-          effectDuration: newCode.effectDuration,
+          effectDuration: newCode.effectType === 'PRO_SUBSCRIPTION' ? newCode.effectDuration : null,
+          effectQuantity: newCode.effectType === 'CLUB_BOOST' ? newCode.effectQuantity : null,
           activatesAt: newCode.activatesAt || null,
           expiresAt: newCode.expiresAt || null,
           maxRedemptions: newCode.maxRedemptions ? parseInt(newCode.maxRedemptions) : null,
@@ -155,6 +170,7 @@ export function PromoCodeManager() {
         code: '',
         effectType: 'PRO_SUBSCRIPTION',
         effectDuration: 1,
+        effectQuantity: 1,
         activatesAt: '',
         expiresAt: '',
         maxRedemptions: '',
@@ -210,13 +226,18 @@ export function PromoCodeManager() {
   }
 
   const handleDeletePromoCode = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this promo code? This action cannot be undone.')) {
-      return
-    }
+    setPromoCodeToDelete(id)
+    setDeleteConfirmOpen(true)
+  }
 
-    setIsDeleting(id)
+  const confirmDeletePromoCode = async () => {
+    if (!promoCodeToDelete) return
+
+    setIsDeleting(promoCodeToDelete)
+    setDeleteConfirmOpen(false)
+
     try {
-      const response = await fetch(`/api/dev/promo-codes?id=${id}`, {
+      const response = await fetch(`/api/dev/promo-codes?id=${promoCodeToDelete}`, {
         method: 'DELETE',
       })
 
@@ -241,6 +262,7 @@ export function PromoCodeManager() {
       })
     } finally {
       setIsDeleting(null)
+      setPromoCodeToDelete(null)
     }
   }
 
@@ -345,8 +367,10 @@ export function PromoCodeManager() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {promoCode.effectDuration} {promoCode.effectType === 'PRO_SUBSCRIPTION' ? 'week' : 'month'}
-                      {promoCode.effectDuration > 1 ? 's' : ''}
+                      {promoCode.effectType === 'PRO_SUBSCRIPTION' 
+                        ? `${promoCode.effectDuration} week${promoCode.effectDuration && promoCode.effectDuration > 1 ? 's' : ''}`
+                        : `${promoCode.effectQuantity} boost${promoCode.effectQuantity && promoCode.effectQuantity > 1 ? 's' : ''}`
+                      }
                     </TableCell>
                     <TableCell>{getPromoStatus(promoCode)}</TableCell>
                     <TableCell>
@@ -432,14 +456,21 @@ export function PromoCodeManager() {
 
             <div className="space-y-2">
               <Label htmlFor="duration">
-                Duration * ({newCode.effectType === 'PRO_SUBSCRIPTION' ? 'weeks' : 'months'})
+                {newCode.effectType === 'PRO_SUBSCRIPTION' ? 'Duration (weeks) *' : 'Quantity (number of boosts) *'}
               </Label>
               <Input
                 id="duration"
                 type="number"
                 min="1"
-                value={newCode.effectDuration}
-                onChange={(e) => setNewCode({ ...newCode, effectDuration: parseInt(e.target.value) || 1 })}
+                value={newCode.effectType === 'PRO_SUBSCRIPTION' ? newCode.effectDuration : newCode.effectQuantity}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value) || 1
+                  if (newCode.effectType === 'PRO_SUBSCRIPTION') {
+                    setNewCode({ ...newCode, effectDuration: value })
+                  } else {
+                    setNewCode({ ...newCode, effectQuantity: value })
+                  }
+                }}
               />
             </div>
 
@@ -537,6 +568,18 @@ export function PromoCodeManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="Delete Promo Code"
+        description="Are you sure you want to delete this promo code? This action cannot be undone and will remove all redemption records."
+        onConfirm={confirmDeletePromoCode}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+      />
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createAuditLog } from '@/lib/audit-log'
 
 // Helper function to check dev panel access
 async function checkDevAccess(email?: string | null) {
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { code, effectType, effectDuration, activatesAt, expiresAt, maxRedemptions } = await request.json()
+    const { code, effectType, effectDuration, effectQuantity, activatesAt, expiresAt, maxRedemptions } = await request.json()
 
     // Validation
     if (!code || typeof code !== 'string' || code.trim().length === 0) {
@@ -112,11 +113,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!effectDuration || typeof effectDuration !== 'number' || effectDuration <= 0) {
-      return NextResponse.json(
-        { error: 'Effect duration must be a positive number' },
-        { status: 400 }
-      )
+    // Validate based on effect type
+    if (effectType === 'PRO_SUBSCRIPTION') {
+      if (!effectDuration || typeof effectDuration !== 'number' || effectDuration <= 0) {
+        return NextResponse.json(
+          { error: 'Duration (in weeks) is required for Pro subscription promos' },
+          { status: 400 }
+        )
+      }
+    } else if (effectType === 'CLUB_BOOST') {
+      if (!effectQuantity || typeof effectQuantity !== 'number' || effectQuantity <= 0) {
+        return NextResponse.json(
+          { error: 'Quantity (number of boosts) is required for club boost promos' },
+          { status: 400 }
+        )
+      }
     }
 
     // Check if code already exists
@@ -136,12 +147,29 @@ export async function POST(request: NextRequest) {
       data: {
         code: code.trim().toUpperCase(),
         effectType,
-        effectDuration,
+        effectDuration: effectType === 'PRO_SUBSCRIPTION' ? effectDuration : null,
+        effectQuantity: effectType === 'CLUB_BOOST' ? effectQuantity : null,
         activatesAt: activatesAt ? new Date(activatesAt) : null,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         maxRedemptions: maxRedemptions || null,
         createdById: session.user.id,
       },
+    })
+
+    // Log the action
+    await createAuditLog({
+      userId: session.user.id,
+      userEmail: session.user.email,
+      userName: session.user.name,
+      action: 'CREATE_PROMO_CODE',
+      target: promoCode.code,
+      details: {
+        effectType: promoCode.effectType,
+        effectDuration: promoCode.effectDuration,
+        effectQuantity: promoCode.effectQuantity,
+        maxRedemptions: promoCode.maxRedemptions,
+      },
+      request,
     })
 
     return NextResponse.json({ promoCode }, { status: 201 })
@@ -180,6 +208,16 @@ export async function DELETE(request: NextRequest) {
 
     await prisma.promoCode.delete({
       where: { id },
+    })
+
+    // Log the action
+    await createAuditLog({
+      userId: session.user.id,
+      userEmail: session.user.email,
+      userName: session.user.name,
+      action: 'DELETE_PROMO_CODE',
+      target: id,
+      request,
     })
 
     return NextResponse.json({ success: true })
@@ -222,6 +260,21 @@ export async function PATCH(request: NextRequest) {
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         maxRedemptions: maxRedemptions || null,
       },
+    })
+
+    // Log the action
+    await createAuditLog({
+      userId: session.user.id,
+      userEmail: session.user.email,
+      userName: session.user.name,
+      action: 'UPDATE_PROMO_CODE',
+      target: promoCode.code,
+      details: {
+        activatesAt,
+        expiresAt,
+        maxRedemptions,
+      },
+      request,
     })
 
     return NextResponse.json({ promoCode })

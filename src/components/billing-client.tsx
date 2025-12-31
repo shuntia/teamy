@@ -21,19 +21,20 @@ interface BillingClientProps {
   clubs: {
     id: string
     name: string
+    boostCount: number
   }[]
   subscriptionStatus?: string | null
   subscriptionType?: string | null
   subscriptionEndsAt?: Date | null
+  availableBoostBalance: number
 }
 
 const proFeatures = [
   'Unlimited clubs',
-  'Priority support',
-  'Advanced analytics',
-  'Custom branding',
-  'API access',
-  'Early access to new features',
+  'Unlimited AI tokens',
+  'Custom backgrounds',
+  'Username display customization',
+  '5 club boosts included',
 ]
 
 const boostTiers = [
@@ -71,7 +72,7 @@ const boostTiers = [
 // Can be set via environment variable or hardcoded here
 const PRO_PRICE_ID = process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || 'price_1234567890' // TODO: Replace with actual Stripe Price ID
 
-export function BillingClient({ user, clubs, subscriptionStatus, subscriptionType, subscriptionEndsAt }: BillingClientProps) {
+export function BillingClient({ user, clubs, subscriptionStatus, subscriptionType, subscriptionEndsAt, availableBoostBalance }: BillingClientProps) {
   const isPro = subscriptionStatus === 'active' && subscriptionType === 'pro'
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -79,6 +80,7 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
   const [isLoading, setIsLoading] = useState(false)
   const [promoCode, setPromoCode] = useState('')
   const [isRedeemingPromo, setIsRedeemingPromo] = useState(false)
+  const [assigningBoostTo, setAssigningBoostTo] = useState<string | null>(null)
   
   // Determine back destination based on where user came from
   const from = searchParams.get('from')
@@ -232,6 +234,51 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
       })
     } finally {
       setIsRedeemingPromo(false)
+    }
+  }
+  
+  const handleAssignBoost = async (clubId: string) => {
+    if (availableBoostBalance <= 0) {
+      toast({
+        title: 'Error',
+        description: 'No available boosts to assign',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setAssigningBoostTo(clubId)
+    try {
+      const response = await fetch('/api/club-boosts/assign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ clubId }),
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to assign club boost')
+      }
+      
+      toast({
+        title: 'Success!',
+        description: 'Club boost assigned successfully',
+      })
+      
+      // Refresh the page to show updated boost counts
+      router.refresh()
+    } catch (error) {
+      console.error('Boost assignment error:', error)
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to assign club boost',
+        variant: 'destructive',
+      })
+    } finally {
+      setAssigningBoostTo(null)
     }
   }
   
@@ -434,13 +481,29 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
 
             {clubs.length === 0 ? (
               <div className="text-center py-4">
-                <p className="text-muted-foreground mb-4">Join a club to purchase boosts for it</p>
+                <p className="text-muted-foreground mb-4">Join a club to assign boosts to it</p>
                 <Link href="/dashboard/club">
                   <Button variant="outline">Go to Dashboard</Button>
                 </Link>
               </div>
             ) : (
               <>
+                {/* Boost Balance */}
+                <div className="mb-6 p-4 bg-teamy-primary/10 border border-teamy-primary/30 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold text-foreground">Available Boost Balance</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {isPro && 'Includes 5 boosts from Pro subscription'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-teamy-primary">{availableBoostBalance}</div>
+                      <div className="text-sm text-muted-foreground">boosts available</div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Your Clubs */}
                 <h3 className="font-semibold mb-4">Your Clubs</h3>
                 <div className="space-y-3">
@@ -448,13 +511,36 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
                     <div key={club.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                       <div>
                         <p className="font-medium text-foreground">{club.name}</p>
-                        <p className="text-sm text-muted-foreground">0 boosts active</p>
+                        <p className="text-sm text-muted-foreground">
+                          {club.boostCount} {club.boostCount === 1 ? 'boost' : 'boosts'} active this month
+                        </p>
                       </div>
-                      <Button variant="outline" disabled>
-                        Add Boosts
+                      <Button 
+                        variant="outline"
+                        onClick={() => handleAssignBoost(club.id)}
+                        disabled={availableBoostBalance <= 0 || assigningBoostTo === club.id}
+                      >
+                        {assigningBoostTo === club.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Assigning...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="h-4 w-4 mr-2" />
+                            Add Boost
+                          </>
+                        )}
                       </Button>
                     </div>
                   ))}
+                </div>
+                
+                <div className="mt-6 p-4 bg-muted/30 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Note:</strong> Club boosts are assigned for the current month and cannot be removed once assigned. 
+                    They will automatically expire at the end of the month.
+                  </p>
                 </div>
               </>
             )}
@@ -464,10 +550,10 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
                 className="w-full max-w-md bg-teamy-primary hover:bg-teamy-primary-dark text-white"
                 disabled
               >
-                Coming Soon
+                Purchase Additional Boosts
               </Button>
               <p className="text-sm text-muted-foreground text-center mt-2">
-                Payment integration coming soon
+                Coming soon: $1/boost/month
               </p>
             </div>
           </CardContent>
@@ -476,4 +562,3 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
     </div>
   )
 }
-

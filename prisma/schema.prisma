@@ -41,6 +41,7 @@ model User {
   tournamentRegistrations TournamentRegistration[] @relation("TournamentRegistrationsBy")
   tournamentStaff         TournamentStaff[]        @relation("TournamentStaffUser")
   promoCodeRedemptions    PromoCodeRedemption[]    @relation("PromoCodeRedemptions")
+  clubBoosts              ClubBoost[]              @relation("UserClubBoosts")
 }
 
 model Account {
@@ -114,6 +115,7 @@ model Club {
   tests                     Test[]
   todos                     Todo[]
   tournamentRegistrations   TournamentRegistration[] @relation("TournamentRegistrations")
+  clubBoosts                ClubBoost[]              @relation("ClubBoosts")
 
   @@index([createdById])
 }
@@ -1480,7 +1482,8 @@ model PromoCode {
   id              String                @id @default(cuid())
   code            String                @unique
   effectType      PromoEffectType
-  effectDuration  Int // Duration in weeks for PRO or months for CLUB_BOOST
+  effectDuration  Int? // Duration in weeks for PRO_SUBSCRIPTION
+  effectQuantity  Int? // Quantity of boosts for CLUB_BOOST
   activatesAt     DateTime? // When the promo code becomes active
   expiresAt       DateTime? // When the promo code expires
   maxRedemptions  Int? // Maximum number of total redemptions (null = unlimited)
@@ -1508,6 +1511,41 @@ model PromoCodeRedemption {
   @@index([userId])
   @@index([promoCodeId])
   @@index([expiresAt])
+}
+
+model ClubBoost {
+  id              String   @id @default(cuid())
+  userId          String
+  clubId          String
+  assignedAt      DateTime @default(now())
+  expiresAt       DateTime // When this boost expires (end of the month it was assigned)
+  sourceType      String   @default("PROMO") // "PROMO", "PURCHASE", "PRO_SUBSCRIPTION"
+  sourceId        String? // Reference to promo redemption or purchase
+  user            User     @relation("UserClubBoosts", fields: [userId], references: [id], onDelete: Cascade)
+  club            Club     @relation("ClubBoosts", fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([clubId])
+  @@index([expiresAt])
+  @@index([assignedAt])
+}
+
+model DevAuditLog {
+  id          String   @id @default(cuid())
+  userId      String
+  userEmail   String
+  userName    String?
+  action      String   // "LOGIN", "CREATE_PROMO", "DELETE_PROMO", "UPDATE_PROMO", "CREATE_BLOG", etc.
+  target      String?  // What was affected (e.g., promo code, blog post slug)
+  details     Json?    // Additional details about the action
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([userEmail])
 }
 
 enum Division {
