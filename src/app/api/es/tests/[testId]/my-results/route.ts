@@ -141,7 +141,7 @@ export async function GET(
     }
 
     // Apply score release mode filtering
-    let filteredAttempt = attemptData
+    let filteredAttempt: typeof attemptData & { answers: typeof attemptData.answers | null } = attemptData
     if (!scoresReleased) {
       // Hide all score-related information
       filteredAttempt = {
