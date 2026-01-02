@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma'
 import { getUserMembership, isAdmin } from '@/lib/rbac'
 import { isTestAvailable } from '@/lib/test-security'
 import { TakeTestClient } from '@/components/tests/take-test-client'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { AlertCircle, ArrowLeft } from 'lucide-react'
 
 export default async function TakeTestPage({
   params,
@@ -304,6 +307,52 @@ export default async function TakeTestPage({
     },
     orderBy: { createdAt: 'desc' },
   })
+
+  // Check maxAttempts limit if no in-progress attempt exists
+  // This prevents users (including admins) from starting a new attempt after they've already reached the limit
+  if (!existingAttempt && test.maxAttempts !== null) {
+    const completedAttempts = await prisma.testAttempt.count({
+      where: {
+        membershipId: membership.id,
+        testId: test.id,
+        status: {
+          in: ['SUBMITTED', 'GRADED'],
+        },
+      },
+    })
+
+    if (completedAttempts >= test.maxAttempts) {
+      const redirectPath = tournamentTest 
+        ? '/testing' 
+        : `/club/${params.clubId}?tab=tests`
+      
+      return (
+        <div className="min-h-screen flex items-center justify-center px-4 py-12 grid-pattern">
+          <div className="container mx-auto max-w-2xl">
+            <Card className="border-destructive/50">
+              <CardHeader className="text-center pb-4">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+                  <AlertCircle className="h-8 w-8 text-destructive" />
+                </div>
+                <CardTitle className="text-2xl">Maximum Attempts Reached</CardTitle>
+                <CardDescription className="text-base mt-2">
+                  You have reached the maximum number of attempts ({test.maxAttempts}) for this test.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex justify-center pt-2">
+                <Button asChild variant="default" size="lg">
+                  <a href={redirectPath}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    {tournamentTest ? 'Return to Testing Portal' : 'Return to Tests'}
+                  </a>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )
+    }
+  }
 
   return (
     <TakeTestClient

@@ -793,6 +793,7 @@ export function TakeTestClient({
                         variant="ghost"
                         size="sm"
                         onClick={() => handleMarkForReview(question.id, !markedForReview.has(question.id))}
+                        disabled={submitting}
                         className={`flex items-center gap-2 h-8 ${
                           markedForReview.has(question.id)
                             ? 'text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300'
@@ -887,6 +888,7 @@ export function TakeTestClient({
                                         answerText: newBlankAnswers.join(' | '), // Store as delimited string for compatibility
                                       })
                                     }}
+                                    disabled={submitting}
                                     className="inline-block w-auto min-w-[150px] max-w-[300px] mx-2 align-middle"
                                   />
                                 )}
@@ -934,6 +936,7 @@ export function TakeTestClient({
                           onChange={(e) => handleAnswerChange(question.id, {
                             answerText: e.target.value,
                           })}
+                          disabled={submitting}
                         />
                       </>
                     )
@@ -947,15 +950,16 @@ export function TakeTestClient({
                       onValueChange={(value) => handleAnswerChange(question.id, {
                         selectedOptionIds: [value],
                       })}
+                      disabled={submitting}
                       className="space-y-2"
                     >
                       {question.options.map((option: any) => (
                         <div
                           key={option.id}
-                          className="flex items-center gap-2 p-3 rounded border cursor-pointer hover:bg-muted"
+                          className={`flex items-center gap-2 p-3 rounded border ${submitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted'}`}
                         >
-                          <RadioGroupItem value={option.id} id={`${question.id}-${option.id}`} />
-                          <Label htmlFor={`${question.id}-${option.id}`} className="cursor-pointer font-normal flex-1">
+                          <RadioGroupItem value={option.id} id={`${question.id}-${option.id}`} disabled={submitting} />
+                          <Label htmlFor={`${question.id}-${option.id}`} className={`${submitting ? 'cursor-not-allowed' : 'cursor-pointer'} font-normal flex-1`}>
                             {option.label}
                           </Label>
                         </div>
@@ -968,7 +972,7 @@ export function TakeTestClient({
                       {question.options.map((option: any) => (
                         <div
                           key={option.id}
-                          className="flex items-center gap-2 p-3 rounded border cursor-pointer hover:bg-muted"
+                          className={`flex items-center gap-2 p-3 rounded border ${submitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted'}`}
                         >
                           <Checkbox
                             id={`${question.id}-${option.id}`}
@@ -982,8 +986,9 @@ export function TakeTestClient({
                                 selectedOptionIds: newSelected,
                               })
                             }}
+                            disabled={submitting}
                           />
-                          <Label htmlFor={`${question.id}-${option.id}`} className="cursor-pointer font-normal flex-1">
+                          <Label htmlFor={`${question.id}-${option.id}`} className={`${submitting ? 'cursor-not-allowed' : 'cursor-pointer'} font-normal flex-1`}>
                             {option.label}
                           </Label>
                         </div>
@@ -1000,6 +1005,7 @@ export function TakeTestClient({
                       onChange={(e) => handleAnswerChange(question.id, {
                         numericAnswer: e.target.value ? parseFloat(e.target.value) : null,
                       })}
+                      disabled={submitting}
                     />
                   )}
 
@@ -1011,6 +1017,7 @@ export function TakeTestClient({
                       onChange={(e) => handleAnswerChange(question.id, {
                         answerText: e.target.value,
                       })}
+                      disabled={submitting}
                     />
                   )}
                 </div>

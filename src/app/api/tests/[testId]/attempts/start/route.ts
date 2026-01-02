@@ -393,7 +393,8 @@ export async function POST(
     }
 
     // Check maxAttempts (if set) - count all completed attempts
-    if (test.maxAttempts !== null && !isAdminUser) {
+    // Admins are also subject to attempt limits
+    if (test.maxAttempts !== null) {
       const completedAttempts = await prisma.testAttempt.count({
         where: {
           membershipId: membership.id,
