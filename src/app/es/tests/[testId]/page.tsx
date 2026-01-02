@@ -176,7 +176,7 @@ export default async function ESEditTestPage({ params }: Props) {
     scoreReleaseMode: 'NONE' as const,
     randomizeQuestionOrder: false,
     randomizeOptionOrder: false,
-    requireFullscreen: false,
+    requireFullscreen: esTest.requireFullscreen ?? true,
     allowCalculator: false,
     calculatorType: null,
     allowNoteSheet: false,

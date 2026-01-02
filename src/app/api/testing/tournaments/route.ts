@@ -282,7 +282,7 @@ export async function GET(req: NextRequest) {
               startAt: et.startAt ? (typeof et.startAt === 'string' ? et.startAt : et.startAt.toISOString()) : null,
               endAt: et.endAt ? (typeof et.endAt === 'string' ? et.endAt : et.endAt.toISOString()) : null,
               allowLateUntil: et.allowLateUntil ? (typeof et.allowLateUntil === 'string' ? et.allowLateUntil : et.allowLateUntil.toISOString()) : null,
-              requireFullscreen: false, // ESTest doesn't have this field
+              requireFullscreen: et.requireFullscreen ?? true,
               allowCalculator: et.allowCalculator ?? false,
               calculatorType: et.calculatorType ?? null,
               allowNoteSheet: et.allowNoteSheet ?? false,

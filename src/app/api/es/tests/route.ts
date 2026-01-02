@@ -703,6 +703,7 @@ export async function POST(request: NextRequest) {
       startAt,
       endAt,
       allowLateUntil,
+      requireFullscreen,
       allowCalculator,
       allowNoteSheet,
       calculatorType,
@@ -722,6 +723,7 @@ export async function POST(request: NextRequest) {
       startAt?: string
       endAt?: string
       allowLateUntil?: string
+      requireFullscreen?: boolean
       allowCalculator?: boolean
       allowNoteSheet?: boolean
       calculatorType?: CalculatorType
@@ -781,6 +783,7 @@ export async function POST(request: NextRequest) {
         startAt: startAt ? new Date(startAt) : null,
         endAt: endAt ? new Date(endAt) : null,
         allowLateUntil: allowLateUntil ? new Date(allowLateUntil) : null,
+        requireFullscreen: requireFullscreen ?? true,
         allowCalculator: allowCalculator ?? false,
         allowNoteSheet: allowNoteSheet ?? false,
         calculatorType: allowCalculator && calculatorType ? calculatorType as 'FOUR_FUNCTION' | 'SCIENTIFIC' | 'GRAPHING' : null,
@@ -916,6 +919,7 @@ export async function PUT(request: NextRequest) {
       startAt,
       endAt,
       allowLateUntil,
+      requireFullscreen,
       allowCalculator,
       allowNoteSheet,
       calculatorType,
@@ -934,6 +938,7 @@ export async function PUT(request: NextRequest) {
       startAt?: string
       endAt?: string
       allowLateUntil?: string
+      requireFullscreen?: boolean
       allowCalculator?: boolean
       allowNoteSheet?: boolean
       calculatorType?: CalculatorType
@@ -1081,6 +1086,7 @@ export async function PUT(request: NextRequest) {
       const existingAllowLateUntil = existingTest.allowLateUntil
       if (newAllowLateUntil?.getTime() !== existingAllowLateUntil?.getTime()) changedFields.push('allowLateUntil')
     }
+    if (requireFullscreen !== undefined && requireFullscreen !== existingTest.requireFullscreen) changedFields.push('requireFullscreen')
     if (allowCalculator !== undefined && allowCalculator !== existingTest.allowCalculator) changedFields.push('allowCalculator')
     if (allowNoteSheet !== undefined && allowNoteSheet !== existingTest.allowNoteSheet) changedFields.push('allowNoteSheet')
     if (calculatorType !== undefined && calculatorType !== existingTest.calculatorType) changedFields.push('calculatorType')
@@ -1104,6 +1110,7 @@ export async function PUT(request: NextRequest) {
           ...(startAt !== undefined && { startAt: newStartAt }),
           ...(endAt !== undefined && { endAt: newEndAt }),
           ...(allowLateUntil !== undefined && { allowLateUntil: allowLateUntil ? new Date(allowLateUntil) : null }),
+          ...(requireFullscreen !== undefined && { requireFullscreen }),
           ...(allowCalculator !== undefined && { allowCalculator }),
           ...(allowNoteSheet !== undefined && { allowNoteSheet }),
           ...(calculatorType !== undefined && { calculatorType: allowCalculator && calculatorType ? calculatorType as 'FOUR_FUNCTION' | 'SCIENTIFIC' | 'GRAPHING' : null }),

@@ -105,7 +105,7 @@ export async function GET(
             startAt: esTest.startAt,
             endAt: esTest.endAt,
             allowLateUntil: esTest.allowLateUntil,
-            requireFullscreen: false,
+            requireFullscreen: esTest.requireFullscreen ?? true,
             allowCalculator: esTest.allowCalculator ?? false,
             calculatorType: esTest.calculatorType,
             allowNoteSheet: esTest.allowNoteSheet ?? false,

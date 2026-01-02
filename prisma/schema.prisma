@@ -1322,6 +1322,7 @@ model ESTest {
   allowLateUntil        DateTime?
   endAt                 DateTime?
   startAt               DateTime?
+  requireFullscreen     Boolean          @default(true)
   allowCalculator       Boolean          @default(false)
   allowNoteSheet        Boolean          @default(false)
   calculatorType        CalculatorType?
