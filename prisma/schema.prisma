@@ -1329,6 +1329,9 @@ model ESTest {
   noteSheetInstructions String?
   autoApproveNoteSheet  Boolean          @default(true)
   requireOneSitting     Boolean          @default(true)
+  releaseScoresAt       DateTime?
+  scoreReleaseMode      ScoreReleaseMode @default(FULL_TEST)
+  scoresReleased         Boolean          @default(false)
   createdBy             TournamentStaff  @relation("ESTestCreator", fields: [createdByStaffId], references: [id], onDelete: Cascade)
   event                 Event?           @relation(fields: [eventId], references: [id])
   staff                 TournamentStaff  @relation("ESTestOwner", fields: [staffId], references: [id], onDelete: Cascade)

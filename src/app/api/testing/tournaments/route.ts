@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+// Force dynamic rendering to ensure fresh data
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // GET /api/testing/tournaments
 // Get all tournaments the user's teams are registered for, with their assigned events and released tests
 export async function GET(req: NextRequest) {
@@ -200,6 +204,7 @@ export async function GET(req: NextRequest) {
           prisma.eSTest.findMany({
             where: {
               tournamentId: registration.tournamentId,
+              status: 'PUBLISHED',
               OR: eventIds.length === 0
                 ? [
                     // If no event assignments, show all tests (both event-specific and general)
@@ -210,7 +215,21 @@ export async function GET(req: NextRequest) {
                     { eventId: null }, // Tests not assigned to a specific event
                   ],
             },
-            include: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              instructions: true,
+              durationMinutes: true,
+              startAt: true,
+              endAt: true,
+              allowLateUntil: true,
+              requireFullscreen: true,
+              allowCalculator: true,
+              calculatorType: true,
+              allowNoteSheet: true,
+              noteSheetInstructions: true,
+              status: true,
               event: {
                 select: {
                   id: true,
@@ -235,67 +254,298 @@ export async function GET(req: NextRequest) {
           (tt) => tt.test.status === 'PUBLISHED'
         )
 
+        // Filter to only PUBLISHED ESTests (status is already selected in the query above)
         const releasedESTests = esTests.filter(
           (et) => et.status === 'PUBLISHED'
         )
 
+        // Check if tournament has ended - we'll use this to determine if tests can be taken
+        const tournament = await prisma.tournament.findUnique({
+          where: { id: registration.tournamentId },
+          select: { endDate: true, endTime: true },
+        })
+
+        let tournamentEnded = false
+        if (tournament) {
+          const endDate = new Date(tournament.endDate)
+          const endTime = new Date(tournament.endTime)
+          const tournamentEndDateTime = new Date(
+            endDate.getFullYear(),
+            endDate.getMonth(),
+            endDate.getDate(),
+            endTime.getHours(),
+            endTime.getMinutes(),
+            endTime.getSeconds()
+          )
+          tournamentEnded = new Date() >= tournamentEndDateTime
+        }
+
+        // Fetch user attempts for ESTests to check completion status
+        const esTestIds = releasedESTests.map(et => et.id)
+        let userESTestAttempts: Array<{ testId: string; status: string; submittedAt: Date | null }> = []
+        if (esTestIds.length > 0) {
+          try {
+            userESTestAttempts = await prisma.eSTestAttempt.findMany({
+              where: {
+                membershipId: membership.id,
+                testId: { in: esTestIds },
+                status: {
+                  in: ['SUBMITTED', 'GRADED'],
+                },
+              },
+              select: {
+                testId: true,
+                status: true,
+                submittedAt: true,
+              },
+            })
+          } catch (error) {
+            console.error('Error fetching ESTest attempts:', error)
+            // Continue with empty array if this fails
+            userESTestAttempts = []
+          }
+        }
+
+        const userESTestAttemptMap = new Map(
+          userESTestAttempts.map(attempt => [attempt.testId, attempt])
+        )
+
+        // Fetch user attempts for regular tests to check completion status
+        const regularTestIds = releasedTournamentTests.map(tt => tt.test.id)
+        let userTestAttempts: Array<{ testId: string; status: string; submittedAt: Date | null }> = []
+        if (regularTestIds.length > 0) {
+          try {
+            userTestAttempts = await prisma.testAttempt.findMany({
+              where: {
+                membershipId: membership.id,
+                testId: { in: regularTestIds },
+                status: {
+                  in: ['SUBMITTED', 'GRADED'],
+                },
+              },
+              select: {
+                testId: true,
+                status: true,
+                submittedAt: true,
+              },
+            })
+          } catch (error) {
+            console.error('Error fetching Test attempts:', error)
+            // Continue with empty array if this fails
+            userTestAttempts = []
+          }
+        }
+
+        const userTestAttemptMap = new Map(
+          userTestAttempts.map(attempt => [attempt.testId, attempt])
+        )
+
+        // Fetch scoresReleased status for all ESTests
+        // Query separately to get score release fields
+        let esTestScoresStatusMap = new Map<string, { releaseScoresAt: Date | string | null; scoreReleaseMode: string; scoresReleased: boolean }>()
+        if (esTestIds.length > 0) {
+          console.log(`[API Testing Tournaments] Fetching scoresReleased for ${esTestIds.length} tests:`, esTestIds)
+          try {
+            const esTestScoresStatus = await prisma.eSTest.findMany({
+              where: {
+                id: { in: esTestIds },
+              },
+              select: {
+                id: true,
+                releaseScoresAt: true,
+                scoreReleaseMode: true,
+                scoresReleased: true,
+              },
+            })
+            console.log(`[API Testing Tournaments] Fetched ${esTestScoresStatus.length} test score statuses:`, esTestScoresStatus.map(t => ({ id: t.id, scoresReleased: t.scoresReleased })))
+            esTestScoresStatusMap = new Map(
+              esTestScoresStatus.map(t => {
+                // Handle scoresReleased - Prisma returns boolean, ensure we check for true explicitly
+                // The field is Boolean @default(false), so it should be true/false, not null
+                // IMPORTANT: Check the raw value from Prisma - it should be boolean true/false
+                const rawScoresReleased = t.scoresReleased
+                const scoresReleased = rawScoresReleased === true
+                
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[API Testing Tournaments] Test ${t.id}:`, {
+                    rawScoresReleased,
+                    type: typeof rawScoresReleased,
+                    isTrue: rawScoresReleased === true,
+                    isTruthy: !!rawScoresReleased,
+                    processed: scoresReleased,
+                  })
+                }
+                
+                return [t.id, {
+                  releaseScoresAt: t.releaseScoresAt,
+                  scoreReleaseMode: t.scoreReleaseMode || 'FULL_TEST',
+                  scoresReleased: scoresReleased,
+                }]
+              })
+            )
+          } catch (error: any) {
+            console.error(`[API Testing Tournaments] Error fetching scoresReleased:`, error)
+            // If fields don't exist (migration not run), try without scoresReleased
+            if (error?.message?.includes('does not exist') || error?.code === 'P2025') {
+              console.warn(`[API Testing Tournaments] scoresReleased column doesn't exist, trying without it`)
+              try {
+                const esTestScoresStatus = await prisma.eSTest.findMany({
+                  where: {
+                    id: { in: esTestIds },
+                  },
+                  select: {
+                    id: true,
+                    releaseScoresAt: true,
+                    scoreReleaseMode: true,
+                  },
+                })
+                esTestScoresStatusMap = new Map(
+                  esTestScoresStatus.map(t => [t.id, {
+                    releaseScoresAt: t.releaseScoresAt,
+                    scoreReleaseMode: t.scoreReleaseMode || 'FULL_TEST',
+                    scoresReleased: false,
+                  }])
+                )
+                console.log(`[API Testing Tournaments] Fallback: Set scoresReleased=false for ${esTestScoresStatus.length} tests`)
+              } catch (e) {
+                console.error('[API Testing Tournaments] Error in fallback query:', e)
+              }
+            } else {
+              console.error('[API Testing Tournaments] Error fetching score release status:', error)
+              throw error
+            }
+          }
+        } else {
+          console.log(`[API Testing Tournaments] No ESTest IDs to fetch scoresReleased for`)
+        }
+
         // Combine both types of tests into a unified format
         // Map ESTest to the same format as regular Test (ESTest doesn't have all the fields)
         const releasedTests = [
-          ...releasedTournamentTests.map((tt) => ({
-            testId: tt.test.id,
-            eventId: tt.eventId,
-            isESTest: false,
-            test: {
-              id: tt.test.id,
-              name: tt.test.name,
-              description: tt.test.description,
-              instructions: tt.test.instructions,
-              durationMinutes: tt.test.durationMinutes,
-              startAt: tt.test.startAt ? (typeof tt.test.startAt === 'string' ? tt.test.startAt : tt.test.startAt.toISOString()) : null,
-              endAt: tt.test.endAt ? (typeof tt.test.endAt === 'string' ? tt.test.endAt : tt.test.endAt.toISOString()) : null,
-              allowLateUntil: tt.test.allowLateUntil ? (typeof tt.test.allowLateUntil === 'string' ? tt.test.allowLateUntil : tt.test.allowLateUntil.toISOString()) : null,
-              requireFullscreen: tt.test.requireFullscreen,
-              allowCalculator: tt.test.allowCalculator,
-              calculatorType: tt.test.calculatorType,
-              allowNoteSheet: tt.test.allowNoteSheet,
-              noteSheetInstructions: tt.test.noteSheetInstructions,
-              maxAttempts: tt.test.maxAttempts,
-              scoreReleaseMode: tt.test.scoreReleaseMode,
-              releaseScoresAt: tt.test.releaseScoresAt ? (typeof tt.test.releaseScoresAt === 'string' ? tt.test.releaseScoresAt : tt.test.releaseScoresAt.toISOString()) : null,
-              questionCount: tt.test._count?.questions ?? 0,
-              clubId: tt.test.clubId,
-              club: tt.test.club,
-            },
-            event: tt.event,
-          })),
-          ...releasedESTests.map((et) => ({
-            testId: et.id,
-            eventId: et.eventId,
-            isESTest: true,
-            test: {
-              id: et.id,
-              name: et.name,
-              description: et.description,
-              instructions: null, // ESTest doesn't have this field
-              durationMinutes: et.durationMinutes,
-              startAt: et.startAt ? (typeof et.startAt === 'string' ? et.startAt : et.startAt.toISOString()) : null,
-              endAt: et.endAt ? (typeof et.endAt === 'string' ? et.endAt : et.endAt.toISOString()) : null,
-              allowLateUntil: et.allowLateUntil ? (typeof et.allowLateUntil === 'string' ? et.allowLateUntil : et.allowLateUntil.toISOString()) : null,
-              requireFullscreen: et.requireFullscreen ?? true,
-              allowCalculator: et.allowCalculator ?? false,
-              calculatorType: et.calculatorType ?? null,
-              allowNoteSheet: et.allowNoteSheet ?? false,
-              noteSheetInstructions: et.noteSheetInstructions ?? null,
-              maxAttempts: null, // ESTest doesn't have this field
-              scoreReleaseMode: null, // ESTest doesn't have this field
-              releaseScoresAt: null, // ESTest doesn't have this field
-              questionCount: et.questions?.length ?? 0,
-              clubId: registration.clubId, // Use registration's clubId as fallback
-              club: registration.club,
-            },
-            event: et.event,
-          })),
+          ...releasedTournamentTests.map((tt) => {
+            // Calculate canViewResults for regular tests
+            const userAttempt = userTestAttemptMap.get(tt.test.id)
+            const hasCompletedAttempt = !!userAttempt
+            const now = new Date()
+            let scoresReleased = false
+            
+            // Check if scores are released based on releaseScoresAt
+            // If releaseScoresAt is set and has passed (or is now), scores are released
+            if (tt.test.releaseScoresAt) {
+              const releaseDate = tt.test.releaseScoresAt instanceof Date ? tt.test.releaseScoresAt : new Date(tt.test.releaseScoresAt)
+              if (!isNaN(releaseDate.getTime())) {
+                // Allow a small buffer (1 second) to account for timing differences
+                scoresReleased = now.getTime() >= (releaseDate.getTime() - 1000)
+              }
+            }
+            // Note: For regular tests, we don't have a scoresReleased field, so we rely on releaseScoresAt
+            
+            const canViewResults = hasCompletedAttempt && scoresReleased
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[API Testing Tournaments] Regular test ${tt.test.id}: hasCompletedAttempt=${hasCompletedAttempt}, releaseScoresAt=${tt.test.releaseScoresAt}, scoresReleased=${scoresReleased}, canViewResults=${canViewResults}`)
+            }
+            
+            return {
+              testId: tt.test.id,
+              eventId: tt.eventId,
+              isESTest: false,
+              test: {
+                isESTest: false,
+                id: tt.test.id,
+                name: tt.test.name,
+                description: tt.test.description,
+                instructions: tt.test.instructions,
+                durationMinutes: tt.test.durationMinutes,
+                startAt: tt.test.startAt ? (typeof tt.test.startAt === 'string' ? tt.test.startAt : tt.test.startAt.toISOString()) : null,
+                endAt: tt.test.endAt ? (typeof tt.test.endAt === 'string' ? tt.test.endAt : tt.test.endAt.toISOString()) : null,
+                allowLateUntil: tt.test.allowLateUntil ? (typeof tt.test.allowLateUntil === 'string' ? tt.test.allowLateUntil : tt.test.allowLateUntil.toISOString()) : null,
+                requireFullscreen: tt.test.requireFullscreen,
+                allowCalculator: tt.test.allowCalculator,
+                calculatorType: tt.test.calculatorType,
+                allowNoteSheet: tt.test.allowNoteSheet,
+                noteSheetInstructions: tt.test.noteSheetInstructions,
+                maxAttempts: tt.test.maxAttempts,
+                scoreReleaseMode: tt.test.scoreReleaseMode,
+                releaseScoresAt: tt.test.releaseScoresAt ? (typeof tt.test.releaseScoresAt === 'string' ? tt.test.releaseScoresAt : tt.test.releaseScoresAt.toISOString()) : null,
+                scoresReleased: scoresReleased, // For regular tests, calculate from releaseScoresAt
+                questionCount: tt.test._count?.questions ?? 0,
+                clubId: tt.test.clubId,
+                club: tt.test.club,
+                tournamentEnded: tournamentEnded, // Add flag to indicate if tournament has ended
+                hasCompletedAttempt: hasCompletedAttempt,
+                canViewResults: canViewResults,
+              },
+              event: tt.event,
+            }
+          }),
+          ...releasedESTests.map((et) => {
+            const userAttempt = userESTestAttemptMap.get(et.id)
+            const scoresStatus = esTestScoresStatusMap.get(et.id)
+            const now = new Date()
+            // Safely access new fields that might not exist yet (if migration hasn't run)
+            const releaseScoresAt = scoresStatus?.releaseScoresAt
+            const scoreReleaseMode = scoresStatus?.scoreReleaseMode || 'FULL_TEST'
+            // Get scoresReleased - if not in map, try to fetch it directly as fallback
+            let scoresReleasedField = scoresStatus?.scoresReleased
+            if (scoresReleasedField === undefined && esTestIds.includes(et.id)) {
+              // Fallback: if not in map, it might be because the query failed, try direct lookup
+              // This shouldn't happen, but handle it gracefully
+              console.warn(`Test ${et.id} not found in scoresStatusMap, using default false`)
+              scoresReleasedField = false
+            }
+            let scoresReleased = false
+            // Check if scores are explicitly released (must be exactly true, not just truthy)
+            if (scoresReleasedField === true) {
+              scoresReleased = true
+            } else if (releaseScoresAt) {
+              // Check if release date has passed
+              const releaseDate = releaseScoresAt instanceof Date ? releaseScoresAt : new Date(releaseScoresAt)
+              if (!isNaN(releaseDate.getTime())) {
+                scoresReleased = now >= releaseDate
+              }
+            }
+            const hasCompletedAttempt = !!userAttempt
+            const canViewResults = hasCompletedAttempt && scoresReleased
+            
+            // Debug logging
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[API] Test ${et.id}: scoresStatus=`, scoresStatus, 'scoresReleasedField=', scoresReleasedField, 'scoresReleased=', scoresReleased, 'hasCompletedAttempt=', hasCompletedAttempt, 'canViewResults=', canViewResults)
+            }
+
+            return {
+              testId: et.id,
+              eventId: et.eventId,
+              isESTest: true,
+              test: {
+                isESTest: true,
+                id: et.id,
+                name: et.name,
+                description: et.description,
+                instructions: et.instructions,
+                durationMinutes: et.durationMinutes,
+                startAt: et.startAt ? (typeof et.startAt === 'string' ? et.startAt : et.startAt.toISOString()) : null,
+                endAt: et.endAt ? (typeof et.endAt === 'string' ? et.endAt : et.endAt.toISOString()) : null,
+                allowLateUntil: et.allowLateUntil ? (typeof et.allowLateUntil === 'string' ? et.allowLateUntil : et.allowLateUntil.toISOString()) : null,
+                requireFullscreen: et.requireFullscreen ?? true,
+                allowCalculator: et.allowCalculator ?? false,
+                calculatorType: et.calculatorType ?? null,
+                allowNoteSheet: et.allowNoteSheet ?? false,
+                noteSheetInstructions: et.noteSheetInstructions ?? null,
+                maxAttempts: null, // ESTest doesn't have this field
+                scoreReleaseMode: scoreReleaseMode || 'FULL_TEST',
+                releaseScoresAt: releaseScoresAt ? (typeof releaseScoresAt === 'string' ? releaseScoresAt : (releaseScoresAt instanceof Date ? releaseScoresAt.toISOString() : null)) : null,
+                scoresReleased: scoresReleased,
+                questionCount: et.questions?.length ?? 0,
+                clubId: registration.clubId, // Use registration's clubId as fallback
+                club: registration.club,
+                hasCompletedAttempt: hasCompletedAttempt,
+                canViewResults: canViewResults,
+                tournamentEnded: tournamentEnded, // Add flag to indicate if tournament has ended
+              },
+              event: et.event,
+            }
+          }),
         ]
 
         // Get trial events from tournament
@@ -421,10 +671,14 @@ export async function GET(req: NextRequest) {
                   maxAttempts: tt.test.maxAttempts,
                   scoreReleaseMode: tt.test.scoreReleaseMode,
                   releaseScoresAt: tt.test.releaseScoresAt,
+                  scoresReleased: (tt.test as any).scoresReleased,
                   questionCount: tt.test.questionCount,
                   clubId: tt.test.clubId,
                   club: tt.test.club,
                   isESTest: tt.isESTest,
+                  hasCompletedAttempt: (tt.test as any).hasCompletedAttempt,
+                  canViewResults: (tt.test as any).canViewResults,
+                  tournamentEnded: (tt.test as any).tournamentEnded || tournamentEnded,
                 })),
               }
             })
@@ -454,10 +708,14 @@ export async function GET(req: NextRequest) {
                 maxAttempts: tt.test.maxAttempts,
                 scoreReleaseMode: tt.test.scoreReleaseMode,
                 releaseScoresAt: tt.test.releaseScoresAt,
+                scoresReleased: (tt.test as any).scoresReleased,
                 questionCount: tt.test.questionCount,
                 clubId: tt.test.clubId,
                 club: tt.test.club,
                 isESTest: tt.isESTest,
+                hasCompletedAttempt: (tt.test as any).hasCompletedAttempt,
+                canViewResults: (tt.test as any).canViewResults,
+                tournamentEnded: (tt.test as any).tournamentEnded || tournamentEnded,
               })),
             }
           })
@@ -494,10 +752,14 @@ export async function GET(req: NextRequest) {
               maxAttempts: tt.test.maxAttempts,
               scoreReleaseMode: tt.test.scoreReleaseMode,
               releaseScoresAt: tt.test.releaseScoresAt,
+              scoresReleased: (tt.test as any).scoresReleased,
               questionCount: tt.test.questionCount,
               clubId: tt.test.clubId,
               club: tt.test.club,
               isESTest: tt.isESTest,
+              hasCompletedAttempt: (tt.test as any).hasCompletedAttempt,
+              canViewResults: (tt.test as any).canViewResults,
+              tournamentEnded: (tt.test as any).tournamentEnded || tournamentEnded,
             })
           } else {
             // True general test (not a trial event)
@@ -518,10 +780,14 @@ export async function GET(req: NextRequest) {
               maxAttempts: tt.test.maxAttempts,
               scoreReleaseMode: tt.test.scoreReleaseMode,
               releaseScoresAt: tt.test.releaseScoresAt,
+              scoresReleased: (tt.test as any).scoresReleased,
               questionCount: tt.test.questionCount,
               clubId: tt.test.clubId,
               club: tt.test.club,
               isESTest: tt.isESTest,
+              hasCompletedAttempt: (tt.test as any).hasCompletedAttempt,
+              canViewResults: (tt.test as any).canViewResults,
+              tournamentEnded: (tt.test as any).tournamentEnded || tournamentEnded,
             })
           }
         }
@@ -563,8 +829,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ tournaments: validTournaments })
   } catch (error) {
     console.error('Get testing tournaments error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : undefined
+    console.error('Error details:', { errorMessage, errorStack })
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
       { status: 500 }
     )
   }

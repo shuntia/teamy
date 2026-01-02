@@ -46,6 +46,8 @@ import {
   Loader2,
   History,
   User,
+  Eye,
+  Unlock,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
@@ -212,6 +214,27 @@ export function TDTournamentManageClient({
   events,
   initialRegistrations = []
 }: TDTournamentManageClientProps) {
+  // Helper to check if tournament has ended
+  const isTournamentEnded = () => {
+    if (!tournament.endDate || !tournament.endTime) {
+      return false // Can't determine if ended without dates
+    }
+    
+    const endDate = new Date(tournament.endDate)
+    const endTime = new Date(tournament.endTime)
+    const tournamentEndDateTime = new Date(
+      endDate.getFullYear(),
+      endDate.getMonth(),
+      endDate.getDate(),
+      endTime.getHours(),
+      endTime.getMinutes(),
+      endTime.getSeconds()
+    )
+    
+    return new Date() >= tournamentEndDateTime
+  }
+  
+  const tournamentEnded = isTournamentEnded()
   const router = useRouter()
   const { toast } = useToast()
   
@@ -1336,6 +1359,89 @@ export function TDTournamentManageClient({
     }
   }
 
+  // Release all scores for the tournament
+  const handleReleaseAllScores = async () => {
+    if (!tournamentEnded) {
+      toast({
+        title: 'Cannot Release Scores',
+        description: 'Scores can only be released after the tournament has ended.',
+        variant: 'destructive',
+      })
+      return
+    }
+    
+    try {
+      const res = await fetch(`/api/tournaments/${tournament.id}/release-all-scores`, {
+        method: 'POST',
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        toast({
+          title: 'Success',
+          description: data.message || 'All scores released successfully',
+        })
+        // Refresh events to show updated status
+        fetchEventsWithTests()
+      } else {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to release scores')
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to release scores',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // Release scores for a specific event
+  const handleReleaseEventScores = async (eventId: string | null, eventName: string) => {
+    if (!tournamentEnded) {
+      toast({
+        title: 'Cannot Release Scores',
+        description: 'Scores can only be released after the tournament has ended.',
+        variant: 'destructive',
+      })
+      return
+    }
+    
+    try {
+      let res: Response
+      if (eventId === null) {
+        // Trial event - use trial event endpoint
+        res = await fetch(`/api/tournaments/${tournament.id}/trial-events/${encodeURIComponent(eventName)}/release-scores`, {
+          method: 'POST',
+        })
+      } else {
+        // Regular event
+        res = await fetch(`/api/tournaments/${tournament.id}/events/${eventId}/release-scores`, {
+          method: 'POST',
+        })
+      }
+
+      if (res.ok) {
+        const data = await res.json()
+        toast({
+          title: 'Success',
+          description: data.message || `Scores released for ${eventName}`,
+        })
+        // Refresh events to show updated status
+        fetchEventsWithTests()
+      } else {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to release scores')
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to release scores',
+        variant: 'destructive',
+      })
+    }
+  }
+
   // Auto-refresh audit logs when modal is open (silently in background)
   useEffect(() => {
     if (!showAuditLogs) return
@@ -2287,6 +2393,15 @@ export function TDTournamentManageClient({
                       Manage Events
                     </Button>
                     <Button 
+                      onClick={handleReleaseAllScores}
+                      variant="outline"
+                      disabled={!tournamentEnded}
+                      title={!tournamentEnded ? 'Scores can only be released after the tournament has ended' : 'Release all scores for this tournament'}
+                    >
+                      <Unlock className="h-4 w-4 mr-2" />
+                      Release All Scores
+                    </Button>
+                    <Button 
                       onClick={() => {
                         setShowAuditLogs(true)
                         if (auditLogs.length === 0) {
@@ -2434,19 +2549,31 @@ export function TDTournamentManageClient({
                                   )}
                                 </p>
                               </div>
-                              <Button 
-                                size="sm"
-                                onClick={() => {
-                                  if (isTrialEvent) {
-                                    router.push(`/td/tests/new?tournamentId=${tournament.id}&trialEventName=${encodeURIComponent(event.name)}&trialEventDivision=${event.division}`)
-                                  } else {
-                                    router.push(`/td/tests/new?tournamentId=${tournament.id}&eventId=${event.id}`)
-                                  }
-                                }}
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Create Test
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button 
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleReleaseEventScores(event.id, event.name)}
+                                  disabled={!tournamentEnded}
+                                  title={!tournamentEnded ? 'Scores can only be released after the tournament has ended' : `Release all scores for ${event.name}`}
+                                >
+                                  <Unlock className="h-4 w-4 mr-2" />
+                                  Release All {event.name} Scores
+                                </Button>
+                                <Button 
+                                  size="sm"
+                                  onClick={() => {
+                                    if (isTrialEvent) {
+                                      router.push(`/td/tests/new?tournamentId=${tournament.id}&trialEventName=${encodeURIComponent(event.name)}&trialEventDivision=${event.division}`)
+                                    } else {
+                                      router.push(`/td/tests/new?tournamentId=${tournament.id}&eventId=${event.id}`)
+                                    }
+                                  }}
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Create Test
+                                </Button>
+                              </div>
                             </div>
                             
                             {filteredTests.length === 0 ? (
@@ -2511,6 +2638,22 @@ export function TDTournamentManageClient({
                                       </div>
                                     </div>
                                     <div className="flex gap-2">
+                                      {test.status === 'PUBLISHED' && (
+                                        <>
+                                          <Link href={`/td/tests/${test.id}/responses`}>
+                                            <Button variant="outline" size="sm">
+                                              <Eye className="h-4 w-4 mr-1" />
+                                              Responses
+                                            </Button>
+                                          </Link>
+                                          <Link href={`/td/tests/${test.id}/settings`}>
+                                            <Button variant="outline" size="sm">
+                                              <Settings className="h-4 w-4 mr-1" />
+                                              Settings
+                                            </Button>
+                                          </Link>
+                                        </>
+                                      )}
                                       {test.allowNoteSheet && (
                                         <Button 
                                           variant="outline" 

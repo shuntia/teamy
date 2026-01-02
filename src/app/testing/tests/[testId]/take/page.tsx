@@ -170,6 +170,45 @@ export default async function TournamentTakeTestPage({
       })
 
       if (esTest) {
+      // Check if tournament has ended - if so, block all test access
+      const tournament = await prisma.tournament.findUnique({
+        where: { id: esTest.tournament.id },
+        select: { endDate: true, endTime: true },
+      })
+
+      if (tournament) {
+        const endDate = new Date(tournament.endDate)
+        const endTime = new Date(tournament.endTime)
+        const tournamentEndDateTime = new Date(
+          endDate.getFullYear(),
+          endDate.getMonth(),
+          endDate.getDate(),
+          endTime.getHours(),
+          endTime.getMinutes(),
+          endTime.getSeconds()
+        )
+
+        const now = new Date()
+        if (now >= tournamentEndDateTime) {
+          return (
+            <div className="container mx-auto max-w-4xl px-4 py-8">
+              <div className="rounded-lg border border-destructive bg-destructive/10 p-6">
+                <h1 className="text-2xl font-bold text-destructive mb-2">Tournament Has Ended</h1>
+                <p className="text-muted-foreground mb-4">
+                  This tournament has ended. Test access is no longer available.
+                </p>
+                <a
+                  href="/testing"
+                  className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  Return to Testing Portal
+                </a>
+              </div>
+            </div>
+          )
+        }
+      }
+      
       // Convert ESTest to Test-like format for TakeTestClient
       test = {
         id: esTest.id,

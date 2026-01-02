@@ -159,6 +159,33 @@ export async function POST(
           // This is an ESTest - handle it similarly to tournament tests
           isTournamentTest = true
           
+          // Check if tournament has ended - if so, block all test access
+          const tournament = await prisma.tournament.findUnique({
+            where: { id: esTest.tournament.id },
+            select: { endDate: true, endTime: true },
+          })
+
+          if (tournament) {
+            const endDate = new Date(tournament.endDate)
+            const endTime = new Date(tournament.endTime)
+            const tournamentEndDateTime = new Date(
+              endDate.getFullYear(),
+              endDate.getMonth(),
+              endDate.getDate(),
+              endTime.getHours(),
+              endTime.getMinutes(),
+              endTime.getSeconds()
+            )
+
+            const now = new Date()
+            if (now >= tournamentEndDateTime) {
+              return NextResponse.json(
+                { error: 'Tournament has ended. Test access is no longer available.' },
+                { status: 403 }
+              )
+            }
+          }
+          
           // Get all user memberships to find their registered teams/clubs
           const userMemberships = await prisma.membership.findMany({
             where: {

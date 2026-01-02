@@ -395,11 +395,19 @@ export async function GET(request: NextRequest) {
     // Process each tournament completely independently
     for (const tournamentId of tournamentIds) {
       // Query ONLY tests for this tournament
+      // Use select to avoid fields that might not exist yet (if migration hasn't run)
       const tournamentTests = await prisma.eSTest.findMany({
         where: {
           tournamentId: tournamentId, // EXPLICIT: Only this tournament
         },
-        include: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          tournamentId: true,
+          eventId: true,
+          createdAt: true,
+          updatedAt: true,
           event: {
             select: {
               id: true,
@@ -968,9 +976,29 @@ export async function PUT(request: NextRequest) {
     }
 
     // First, get the existing test to check its event
+    // Use select to avoid fields that might not exist yet (if migration hasn't run)
     const existingTest = await prisma.eSTest.findUnique({
       where: { id: testId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        instructions: true,
+        status: true,
+        durationMinutes: true,
+        tournamentId: true,
+        staffId: true,
+        eventId: true,
+        startAt: true,
+        endAt: true,
+        allowLateUntil: true,
+        requireFullscreen: true,
+        allowCalculator: true,
+        allowNoteSheet: true,
+        calculatorType: true,
+        noteSheetInstructions: true,
+        autoApproveNoteSheet: true,
+        requireOneSitting: true,
         questions: {
           include: {
             options: true,
@@ -1267,9 +1295,30 @@ export async function PUT(request: NextRequest) {
     })
 
     // Fetch the complete updated test
+    // Use select to avoid fields that might not exist yet (if migration hasn't run)
     const completeTest = await prisma.eSTest.findUnique({
       where: { id: testId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        instructions: true,
+        status: true,
+        durationMinutes: true,
+        tournamentId: true,
+        eventId: true,
+        startAt: true,
+        endAt: true,
+        allowLateUntil: true,
+        requireFullscreen: true,
+        allowCalculator: true,
+        allowNoteSheet: true,
+        calculatorType: true,
+        noteSheetInstructions: true,
+        autoApproveNoteSheet: true,
+        requireOneSitting: true,
+        createdAt: true,
+        updatedAt: true,
         event: {
           select: {
             id: true,
@@ -1322,9 +1371,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     // First, get the existing test to check its event
+    // Use select to avoid fields that might not exist yet (if migration hasn't run)
     const existingTest = await prisma.eSTest.findUnique({
       where: { id: testId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        tournamentId: true,
+        staffId: true,
+        eventId: true,
         event: {
           select: {
             id: true,

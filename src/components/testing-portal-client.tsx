@@ -18,7 +18,7 @@ import {
 import { EditUsernameDialog } from '@/components/edit-username-dialog'
 import { useToast } from '@/components/ui/use-toast'
 import { PageLoading } from '@/components/ui/loading-spinner'
-import { Calendar, MapPin, Trophy, FileText, ChevronRight, LogOut, Pencil, ChevronDown, Clock, HelpCircle, ListChecks, AlertCircle, Calculator, FileCheck, Play, ArrowRight, Upload, CheckCircle2, XCircle } from 'lucide-react'
+import { Calendar, MapPin, Trophy, FileText, ChevronRight, LogOut, Pencil, ChevronDown, Clock, HelpCircle, ListChecks, AlertCircle, Calculator, FileCheck, Play, ArrowRight, Upload, CheckCircle2, XCircle, Eye } from 'lucide-react'
 import { formatDivision } from '@/lib/utils'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -104,12 +104,16 @@ interface Tournament {
       maxAttempts: number | null
       scoreReleaseMode: string | null
       releaseScoresAt: string | null
+      scoresReleased?: boolean
       questionCount: number
       clubId: string
       club: {
         id: string
         name: string
       }
+      isESTest?: boolean
+      hasCompletedAttempt?: boolean
+      canViewResults?: boolean
     }>
   }>
   generalTests: Array<{
@@ -129,12 +133,16 @@ interface Tournament {
     maxAttempts: number | null
     scoreReleaseMode: string | null
     releaseScoresAt: string | null
+    scoresReleased?: boolean
     questionCount: number
     clubId: string
     club: {
       id: string
       name: string
     }
+    isESTest?: boolean
+    hasCompletedAttempt?: boolean
+    canViewResults?: boolean
   }>
 }
 
@@ -207,11 +215,16 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
     }
   }
 
-  const loadTournaments = async () => {
+  const loadTournaments = async (forceRefresh = false) => {
     try {
       setLoading(true)
-      const response = await fetch('/api/testing/tournaments')
-      if (!response.ok) throw new Error('Failed to load tournaments')
+      // Add cache-busting query param if forcing refresh
+      const url = forceRefresh ? `/api/testing/tournaments?t=${Date.now()}` : '/api/testing/tournaments'
+      const response = await fetch(url)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || errorData.details || 'Failed to load tournaments')
+      }
       
       const data = await response.json()
       setTournaments(data.tournaments || [])
@@ -219,6 +232,7 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
       // Load note sheet statuses for all tests that allow note sheets
       await loadNoteSheetStatuses(data.tournaments || [])
     } catch (error: any) {
+      console.error('Failed to load tournaments:', error)
       toast({
         title: 'Error',
         description: error.message || 'Failed to load tournaments',
@@ -842,6 +856,47 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
                                       
                                       {(() => {
                                         const availability = checkTestAvailability(test)
+                                        // For ESTest, check if user can view results
+                                        // Debug logging to help diagnose issues
+                                        if (process.env.NODE_ENV === 'development' && test.isESTest) {
+                                          console.log(`[Testing Portal] Test ${test.id} (${test.name}):`, {
+                                            isESTest: test.isESTest,
+                                            canViewResults: test.canViewResults,
+                                            hasCompletedAttempt: test.hasCompletedAttempt,
+                                            scoresReleased: test.scoresReleased,
+                                          })
+                                        }
+                                        // Check if tournament has ended
+                                        const tournamentEnded = test.tournamentEnded === true
+                                        
+                                        // If scores are released and user can view results, show View Results button (for both ESTest and regular tests)
+                                        if (test.canViewResults) {
+                                          return (
+                                            <div className="flex flex-col items-end gap-2">
+                                              <Link href={`/testing/tests/${test.id}/results`}>
+                                                <Button
+                                                  size="lg"
+                                                  variant="outline"
+                                                  className="gap-2"
+                                                >
+                                                  <Eye className="h-4 w-4" />
+                                                  View Results
+                                                </Button>
+                                              </Link>
+                                            </div>
+                                          )
+                                        }
+                                        
+                                        // If tournament has ended, don't show Take Test button
+                                        if (tournamentEnded) {
+                                          return (
+                                            <div className="flex flex-col items-end gap-2">
+                                              <span className="text-xs text-muted-foreground">Tournament has ended</span>
+                                            </div>
+                                          )
+                                        }
+                                        
+                                        // Tournament hasn't ended - show Take Test button
                                         return (
                                           <div className="flex flex-col items-end gap-2">
                                             {!availability.available && availability.reason && (
@@ -1177,6 +1232,47 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
                                       
                                       {(() => {
                                         const availability = checkTestAvailability(test)
+                                        // For ESTest, check if user can view results
+                                        // Debug logging to help diagnose issues
+                                        if (process.env.NODE_ENV === 'development' && test.isESTest) {
+                                          console.log(`[Testing Portal] Test ${test.id} (${test.name}):`, {
+                                            isESTest: test.isESTest,
+                                            canViewResults: test.canViewResults,
+                                            hasCompletedAttempt: test.hasCompletedAttempt,
+                                            scoresReleased: test.scoresReleased,
+                                          })
+                                        }
+                                        // Check if tournament has ended
+                                        const tournamentEnded = test.tournamentEnded === true
+                                        
+                                        // If scores are released and user can view results, show View Results button (for both ESTest and regular tests)
+                                        if (test.canViewResults) {
+                                          return (
+                                            <div className="flex flex-col items-end gap-2">
+                                              <Link href={`/testing/tests/${test.id}/results`}>
+                                                <Button
+                                                  size="lg"
+                                                  variant="outline"
+                                                  className="gap-2"
+                                                >
+                                                  <Eye className="h-4 w-4" />
+                                                  View Results
+                                                </Button>
+                                              </Link>
+                                            </div>
+                                          )
+                                        }
+                                        
+                                        // If tournament has ended, don't show Take Test button
+                                        if (tournamentEnded) {
+                                          return (
+                                            <div className="flex flex-col items-end gap-2">
+                                              <span className="text-xs text-muted-foreground">Tournament has ended</span>
+                                            </div>
+                                          )
+                                        }
+                                        
+                                        // Tournament hasn't ended - show Take Test button
                                         return (
                                           <div className="flex flex-col items-end gap-2">
                                             {!availability.available && availability.reason && (
@@ -1502,6 +1598,19 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
                               
                               {(() => {
                                 const availability = checkTestAvailability(test)
+                                // Check if tournament has ended
+                                const tournamentEnded = test.tournamentEnded === true
+                                
+                                // If tournament has ended, don't show Take Test button
+                                if (tournamentEnded) {
+                                  return (
+                                    <div className="flex flex-col items-end gap-2">
+                                      <span className="text-xs text-muted-foreground">Tournament has ended</span>
+                                    </div>
+                                  )
+                                }
+                                
+                                // Tournament hasn't ended - show Take Test button
                                 return (
                                   <div className="flex flex-col items-end gap-2">
                                     {!availability.available && availability.reason && (

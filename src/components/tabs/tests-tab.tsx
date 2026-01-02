@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Clock, Users, FileText, AlertCircle, Play, Eye, Trash2, Lock, Search, Edit, Calculator as CalcIcon, FileEdit } from 'lucide-react'
+import { Plus, Clock, Users, FileText, AlertCircle, Play, Eye, Trash2, Lock, Search, Edit, Calculator as CalcIcon, FileEdit, Settings } from 'lucide-react'
 import { NoteSheetUpload } from '@/components/tests/note-sheet-upload'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageLoading } from '@/components/ui/loading-spinner'
@@ -398,6 +398,16 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
     window.location.href = `/club/${clubId}/tests/${test.id}`
   }
 
+  const handleViewResponses = (test: Test) => {
+    // Navigate to test detail page with Responses tab (default)
+    window.location.href = `/club/${clubId}/tests/${test.id}`
+  }
+
+  const handleViewSettings = (test: Test) => {
+    // Navigate to test detail page with Settings tab
+    window.location.href = `/club/${clubId}/tests/${test.id}?view=test`
+  }
+
   const handleTakeTest = (test: Test) => {
     // Navigate to test player
     window.location.href = `/club/${clubId}/tests/${test.id}/take`
@@ -565,23 +575,35 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
           </div>
           {isAdmin && (
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleViewTest(test)}
-              >
-                {test.status === 'DRAFT' ? (
-                  <>
-                    <Edit className="h-4 w-4 mr-1" />
-                    Edit
-                  </>
-                ) : (
-                  <>
+              {test.status === 'DRAFT' ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleViewTest(test)}
+                >
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleViewResponses(test)}
+                  >
                     <Eye className="h-4 w-4 mr-1" />
-                    Overview and Responses
-                  </>
-                )}
-              </Button>
+                    Responses
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleViewSettings(test)}
+                  >
+                    <Settings className="h-4 w-4 mr-1" />
+                    Settings
+                  </Button>
+                </>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
