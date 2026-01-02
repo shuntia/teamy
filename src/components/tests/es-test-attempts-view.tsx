@@ -427,12 +427,10 @@ export function ESTestAttemptsView({ testId, testName, scoresReleased: initialSc
                               </span>
                             </div>
                           )}
-                          {attempt.tabSwitchCount > 0 && (
-                            <div className="flex items-center gap-1 text-orange-600">
-                              <AlertTriangle className="h-3 w-3" />
-                              <span>{attempt.tabSwitchCount} tab switches</span>
-                            </div>
-                          )}
+                          <div className={`flex items-center gap-1 ${attempt.tabSwitchCount > 0 ? 'text-orange-600' : 'text-muted-foreground'}`}>
+                            {attempt.tabSwitchCount > 0 && <AlertTriangle className="h-3 w-3" />}
+                            <span>{attempt.tabSwitchCount} tab switch{attempt.tabSwitchCount !== 1 ? 'es' : ''}</span>
+                          </div>
                         </div>
                       </div>
                       
@@ -493,6 +491,18 @@ export function ESTestAttemptsView({ testId, testName, scoresReleased: initialSc
                     {calculateTimeTaken(selectedAttempt.startedAt, selectedAttempt.submittedAt)}
                   </p>
                 </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase">Tab Switches</p>
+                  <p className={`text-lg font-semibold ${selectedAttempt.tabSwitchCount > 0 ? 'text-orange-600' : ''}`}>
+                    {selectedAttempt.tabSwitchCount}
+                  </p>
+                </div>
+                {selectedAttempt.submittedAt && (
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase">Submitted</p>
+                    <p className="text-sm">{new Date(selectedAttempt.submittedAt).toLocaleString()}</p>
+                  </div>
+                )}
               </div>
 
               {/* Answers */}
