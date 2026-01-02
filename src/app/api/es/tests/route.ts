@@ -783,7 +783,7 @@ export async function POST(request: NextRequest) {
         startAt: startAt ? new Date(startAt) : null,
         endAt: endAt ? new Date(endAt) : null,
         allowLateUntil: allowLateUntil ? new Date(allowLateUntil) : null,
-        requireFullscreen: requireFullscreen ?? true,
+        requireFullscreen: requireFullscreen !== undefined ? requireFullscreen : true,
         allowCalculator: allowCalculator ?? false,
         allowNoteSheet: allowNoteSheet ?? false,
         calculatorType: allowCalculator && calculatorType ? calculatorType as 'FOUR_FUNCTION' | 'SCIENTIFIC' | 'GRAPHING' : null,
@@ -1086,7 +1086,10 @@ export async function PUT(request: NextRequest) {
       const existingAllowLateUntil = existingTest.allowLateUntil
       if (newAllowLateUntil?.getTime() !== existingAllowLateUntil?.getTime()) changedFields.push('allowLateUntil')
     }
-    if (requireFullscreen !== undefined && requireFullscreen !== existingTest.requireFullscreen) changedFields.push('requireFullscreen')
+    if (requireFullscreen !== undefined) {
+      const currentRequireFullscreen = existingTest.requireFullscreen ?? true
+      if (requireFullscreen !== currentRequireFullscreen) changedFields.push('requireFullscreen')
+    }
     if (allowCalculator !== undefined && allowCalculator !== existingTest.allowCalculator) changedFields.push('allowCalculator')
     if (allowNoteSheet !== undefined && allowNoteSheet !== existingTest.allowNoteSheet) changedFields.push('allowNoteSheet')
     if (calculatorType !== undefined && calculatorType !== existingTest.calculatorType) changedFields.push('calculatorType')

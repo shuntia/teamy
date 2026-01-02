@@ -367,7 +367,7 @@ export function NewTestBuilder({
     releaseScoresAt: '',
     maxAttempts: test?.maxAttempts?.toString() || '',
     scoreReleaseMode: (test?.scoreReleaseMode || 'FULL_TEST') as 'NONE' | 'SCORE_ONLY' | 'SCORE_WITH_WRONG' | 'FULL_TEST',
-    requireFullscreen: test?.requireFullscreen ?? true,
+    requireFullscreen: test?.requireFullscreen !== undefined ? test.requireFullscreen : true,
   })
   const [dateTimeErrors, setDateTimeErrors] = useState<{ startAt?: string; endAt?: string }>({})
 
@@ -1086,6 +1086,7 @@ export function NewTestBuilder({
             startAt: startAtISO,
             endAt: endAtISO,
             allowLateUntil: allowLateUntilISO,
+            requireFullscreen: publishFormData.requireFullscreen,
             allowCalculator: payload.allowCalculator,
             calculatorType: payload.allowCalculator ? payload.calculatorType : undefined,
             allowNoteSheet: payload.allowNoteSheet,
@@ -1316,6 +1317,7 @@ export function NewTestBuilder({
             description: payload.description,
             instructions: payload.instructions,
             durationMinutes: payload.durationMinutes,
+            requireFullscreen: publishFormData.requireFullscreen,
             allowCalculator: payload.allowCalculator,
             calculatorType: payload.allowCalculator ? payload.calculatorType : undefined,
             allowNoteSheet: payload.allowNoteSheet,
@@ -1502,6 +1504,7 @@ export function NewTestBuilder({
             startAt: startAtISO,
             endAt: endAtISO,
             allowLateUntil: allowLateUntilISO,
+            requireFullscreen: publishFormData.requireFullscreen,
             allowCalculator: details.allowCalculator,
             calculatorType: details.allowCalculator ? details.calculatorType : undefined,
             allowNoteSheet: details.allowNoteSheet,
@@ -2170,7 +2173,10 @@ export function NewTestBuilder({
                 <Checkbox
                   id="require-fullscreen"
                   checked={publishFormData.requireFullscreen}
-                  onCheckedChange={(checked) => setPublishFormData((prev) => ({ ...prev, requireFullscreen: checked as boolean }))}
+                  onCheckedChange={(checked) => {
+                    const value = checked === true
+                    setPublishFormData((prev) => ({ ...prev, requireFullscreen: value }))
+                  }}
                 />
                 <Label htmlFor="require-fullscreen" className="cursor-pointer text-sm font-medium">
                   Require fullscreen lockdown

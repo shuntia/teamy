@@ -181,7 +181,7 @@ export default async function TournamentTakeTestPage({
         startAt: esTest.startAt,
         endAt: esTest.endAt,
         allowLateUntil: esTest.allowLateUntil,
-        requireFullscreen: esTest.requireFullscreen ?? true,
+        requireFullscreen: esTest.requireFullscreen !== undefined ? esTest.requireFullscreen : true,
         allowCalculator: esTest.allowCalculator ?? false,
         calculatorType: esTest.calculatorType,
         allowNoteSheet: esTest.allowNoteSheet ?? false,
