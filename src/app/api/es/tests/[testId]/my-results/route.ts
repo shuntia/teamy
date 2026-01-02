@@ -167,13 +167,13 @@ export async function GET(
         ...attemptData,
         gradeEarned: null,
         proctoringScore: null,
-        answers: null,
+        answers: null as any,
       }
     } else if (scoreReleaseMode === 'SCORE_ONLY') {
       // SCORE_ONLY - show only the score
       filteredAttempt = {
         ...attemptData,
-        answers: null,
+        answers: null as any,
       }
     } else if (scoreReleaseMode === 'SCORE_WITH_WRONG') {
       // SCORE_WITH_WRONG - show score and wrong answers only
