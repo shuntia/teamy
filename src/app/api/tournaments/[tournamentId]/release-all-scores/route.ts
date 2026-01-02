@@ -131,7 +131,7 @@ export async function POST(
     }
 
     // Update all regular tests to set releaseScoresAt to now
-    const now = new Date()
+    const releaseTime = new Date()
     for (const test of regularTests) {
       try {
         const before = await prisma.test.findUnique({
@@ -142,7 +142,7 @@ export async function POST(
         
         const updated = await prisma.test.update({
           where: { id: test.id },
-          data: { releaseScoresAt: now },
+          data: { releaseScoresAt: releaseTime },
           select: { id: true, releaseScoresAt: true, name: true },
         })
         console.log(`[Release All Scores] Regular test ${test.id} (${updated.name}): after update releaseScoresAt =`, updated.releaseScoresAt)
