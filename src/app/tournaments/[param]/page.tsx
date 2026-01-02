@@ -140,6 +140,45 @@ export default async function TournamentPage({ params }: Props) {
       }
     }
 
+    // Pre-fetch events not offered
+    let initialEventsNotRun: Array<{ id: string; name: string; division: string }> = []
+    if (serializedTournament?.eventsRun && serializedTournament.eventsRun.trim()) {
+      try {
+        const eventsRunIds = JSON.parse(serializedTournament.eventsRun) as string[]
+        if (Array.isArray(eventsRunIds) && eventsRunIds.length > 0) {
+          // Determine which divisions to fetch events for
+          const divisions: ('B' | 'C')[] = []
+          if (displayDivision === 'B' || displayDivision === 'B&C') {
+            divisions.push('B')
+          }
+          if (displayDivision === 'C' || displayDivision === 'B&C') {
+            divisions.push('C')
+          }
+
+          // Fetch events for all relevant divisions
+          const allEvents: Array<{ id: string; name: string; division: string }> = []
+          for (const division of divisions) {
+            const events = await prisma.event.findMany({
+              where: { division },
+              select: {
+                id: true,
+                name: true,
+                division: true,
+              },
+              orderBy: { name: 'asc' },
+            })
+            allEvents.push(...events)
+          }
+
+          // Find events that are NOT in eventsRun
+          const notRun = allEvents.filter(event => !eventsRunIds.includes(event.id))
+          initialEventsNotRun = notRun.sort((a, b) => a.name.localeCompare(b.name))
+        }
+      } catch (e) {
+        console.error('Error calculating events not run:', e)
+      }
+    }
+
     // Check if user is registered and if tests are available
     let isRegistered = false
     let hasAvailableTests = false
@@ -262,6 +301,7 @@ export default async function TournamentPage({ params }: Props) {
         initialSections={initialSections}
         isRegistered={isRegistered}
         hasAvailableTests={hasAvailableTests}
+        initialEventsNotRun={initialEventsNotRun}
       />
     )
   }
@@ -391,6 +431,45 @@ export default async function TournamentPage({ params }: Props) {
     }
   }
 
+  // Pre-fetch events not offered
+  let initialEventsNotRun: Array<{ id: string; name: string; division: string }> = []
+  if (serializedTournament?.eventsRun && serializedTournament.eventsRun.trim()) {
+    try {
+      const eventsRunIds = JSON.parse(serializedTournament.eventsRun) as string[]
+      if (Array.isArray(eventsRunIds) && eventsRunIds.length > 0) {
+        // Determine which divisions to fetch events for
+        const divisions: ('B' | 'C')[] = []
+        if (displayDivision === 'B' || displayDivision === 'B&C') {
+          divisions.push('B')
+        }
+        if (displayDivision === 'C' || displayDivision === 'B&C') {
+          divisions.push('C')
+        }
+
+        // Fetch events for all relevant divisions
+        const allEvents: Array<{ id: string; name: string; division: string }> = []
+        for (const division of divisions) {
+          const events = await prisma.event.findMany({
+            where: { division },
+            select: {
+              id: true,
+              name: true,
+              division: true,
+            },
+            orderBy: { name: 'asc' },
+          })
+          allEvents.push(...events)
+        }
+
+        // Find events that are NOT in eventsRun
+        const notRun = allEvents.filter(event => !eventsRunIds.includes(event.id))
+        initialEventsNotRun = notRun.sort((a, b) => a.name.localeCompare(b.name))
+      }
+    } catch (e) {
+      console.error('Error calculating events not run:', e)
+    }
+  }
+
   // Check if user is registered and if tests are available
   let isRegistered = false
   let hasAvailableTests = false
@@ -513,6 +592,7 @@ export default async function TournamentPage({ params }: Props) {
       initialSections={initialSections}
       isRegistered={isRegistered}
       hasAvailableTests={hasAvailableTests}
+      initialEventsNotRun={initialEventsNotRun}
     />
   )
 }

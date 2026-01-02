@@ -110,6 +110,7 @@ interface TournamentPageClientProps {
   initialSections?: Section[]
   isRegistered?: boolean
   hasAvailableTests?: boolean
+  initialEventsNotRun?: Array<{ id: string; name: string; division: string }>
 }
 
 export function TournamentPageClient({ 
@@ -122,6 +123,7 @@ export function TournamentPageClient({
   initialSections,
   isRegistered: initialIsRegistered = false,
   hasAvailableTests: initialHasAvailableTests = false,
+  initialEventsNotRun = [],
 }: TournamentPageClientProps) {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
@@ -142,22 +144,24 @@ export function TournamentPageClient({
   const [selectedTeams, setSelectedTeams] = useState<string[]>([])
   const [registering, setRegistering] = useState(false)
 
-  // Events not being run
-  const [eventsNotRun, setEventsNotRun] = useState<Array<{ id: string; name: string; division: string }>>([])
-  const [eventsNotRunLoading, setEventsNotRunLoading] = useState(true)
+  // Events not being run - use initial data from server (always provided now)
+  const [eventsNotRun, setEventsNotRun] = useState<Array<{ id: string; name: string; division: string }>>(initialEventsNotRun)
+  const [eventsNotRunLoading, setEventsNotRunLoading] = useState(false)
 
   // Check if user is registered and tests are available (use initial values from server)
   const [isRegistered, setIsRegistered] = useState(initialIsRegistered)
   const [hasAvailableTests, setHasAvailableTests] = useState(initialHasAvailableTests)
 
-  // Fetch events and calculate which are not being run
+  // Update events not run if tournament data changes (fallback for client-side updates)
   useEffect(() => {
-    const fetchEventsNotRun = async () => {
-      if (!tournament) {
-        setEventsNotRunLoading(false)
-        return
-      }
+    // Only refetch if tournament changes and we need to recalculate
+    // In most cases, initialEventsNotRun from server will be used
+    if (!tournament || initialEventsNotRun.length > 0) {
+      return
+    }
 
+    // This is a fallback - should rarely be needed since server always provides initial data
+    const fetchEventsNotRun = async () => {
       setEventsNotRunLoading(true)
 
       try {
@@ -218,7 +222,7 @@ export function TournamentPageClient({
     }
 
     fetchEventsNotRun()
-  }, [tournament?.id, tournament?.division, tournament?.eventsRun])
+  }, [tournament?.id, tournament?.division, tournament?.eventsRun, initialEventsNotRun])
 
   const handleSave = async () => {
     setSaving(true)
