@@ -84,7 +84,7 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
   
   // Determine back destination based on where user came from
   const from = searchParams.get('from')
-  const backHref = from === 'tournaments' ? '/dashboard/tournaments' : '/dashboard/club'
+  const backHref = '/dashboard'
   
   // Check for success/cancel messages and verify subscription
   useEffect(() => {

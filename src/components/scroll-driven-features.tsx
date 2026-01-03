@@ -35,16 +35,16 @@ interface ScrollDrivenFeaturesProps {
 
 export function ScrollDrivenFeatures({ features }: ScrollDrivenFeaturesProps) {
   const [activeIndex, setActiveIndex] = useState(0)
-  const [minHeight, setMinHeight] = useState(`${features.length * 30}vh`)
+  const [minHeight, setMinHeight] = useState(`${features.length * 50}vh`)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // Adjust min-height for mobile
     const updateMinHeight = () => {
       if (window.innerWidth < 640) {
-        setMinHeight(`${features.length * 25}vh`)
+        setMinHeight(`${features.length * 40}vh`)
       } else {
-        setMinHeight(`${features.length * 30}vh`)
+        setMinHeight(`${features.length * 50}vh`)
       }
     }
     

@@ -33,13 +33,13 @@ export default function AboutPage() {
           <Card className="overflow-hidden">
             <CardContent className="p-8 md:p-12">
               <h2 className="text-2xl font-bold mb-6">Our Mission</h2>
-              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+              <p className="text-base text-muted-foreground leading-normal mb-4">
                 Science Olympiad is an incredible program that inspires students to pursue STEM through 
                 hands-on competition. But behind every successful team is a mountain of administrative 
                 work—managing rosters, tracking attendance, creating practice tests, organizing events, 
                 and so much more.
               </p>
-              <p className="text-lg text-muted-foreground leading-relaxed">
+              <p className="text-base text-muted-foreground leading-normal">
                 <strong className="text-foreground">We believe that coaches, captains, and tournament directors 
                 should spend their time mentoring students and building their teams, not wrestling with 
                 spreadsheets and scattered tools.</strong> That&apos;s why we built Teamy: to give every 
@@ -55,12 +55,12 @@ export default function AboutPage() {
           <Card className="overflow-hidden">
             <CardContent className="p-8 md:p-12">
               <h2 className="text-2xl font-bold mb-6">Leveling the Playing Field</h2>
-              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+              <p className="text-base text-muted-foreground leading-normal mb-4">
                 Some Science Olympiad teams have multiple dedicated coaches, abundant resources, and established 
                 systems built over years of competition. Others are just getting started, led by 
                 passionate students trying to figure it all out on their own.
               </p>
-              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+              <p className="text-base text-muted-foreground leading-normal mb-4">
                 Teamy levels the playing field. Whether you&apos;re a well-funded team with a decade of 
                 state championships or a brand-new club meeting during lunch in a small classroom, you 
                 deserve access to the same powerful management tools.
@@ -74,22 +74,22 @@ export default function AboutPage() {
           <Card className="overflow-hidden">
             <CardContent className="p-8 md:p-12">
               <h2 className="text-2xl font-bold mb-6">Our Story</h2>
-              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+              <p className="text-base text-muted-foreground leading-normal mb-4">
                 Teamy was created by a first-time Science Olympiad captains and tournament directors
                 who experienced firsthand just how overwhelming it can be to manage a team while 
                 also being a student.
               </p>
-              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+              <p className="text-base text-muted-foreground leading-normal mb-4">
                 Between juggling rosters, coordinating practice schedules, creating study materials,
                 tracking attendance, managing budgets, and organizing logistics for invitational 
                 tournaments, it became clear that Science Olympiad leaders needed better tools.
               </p>
-              <p className="text-lg text-muted-foreground leading-relaxed mb-6">
+              <p className="text-base text-muted-foreground leading-normal mb-4">
                 After searching for solutions and finding only scattered spreadsheets, outdated 
                 websites, and expensive enterprise software, the decision was made: if the perfect 
                 tool didn&apos;t exist, we&apos;d build it ourselves.
               </p>
-              <p className="text-lg font-medium text-foreground">
+              <p className="text-base font-medium text-foreground">
                 Teamy is the platform we wish we had when we first took on Science Olympiad leadership.
                 Now, we&apos;re sharing it with the entire community.
               </p>
@@ -102,11 +102,11 @@ export default function AboutPage() {
           <Card className="overflow-hidden bg-slate-900 dark:bg-slate-800 text-white">
             <CardContent className="p-8 md:p-12">
               <h2 className="text-2xl font-bold mb-6">Open Source</h2>
-              <p className="text-lg text-slate-300 leading-relaxed mb-6">
+              <p className="text-base text-slate-300 leading-normal mb-4">
                 Teamy is open source because we believe in transparency and community. You can view 
                 our code, suggest improvements, report bugs, or even contribute new features.
               </p>
-              <p className="text-lg text-slate-300 leading-relaxed mb-8">
+              <p className="text-base text-slate-300 leading-normal mb-8">
                 We&apos;re building this in the open because Science Olympiad is a community, and 
                 Teamy should be one too.
               </p>
@@ -129,21 +129,14 @@ export default function AboutPage() {
         <section className="text-center">
           <Card className="overflow-hidden border-teamy-primary/20 bg-teamy-primary/5">
             <CardContent className="p-8 md:p-12">
-              <Heart className="h-12 w-12 text-teamy-primary mx-auto mb-6" />
               <h2 className="text-2xl font-bold mb-4">
                 Ready to Transform Your Team?
               </h2>
-              <p className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto">
+              <p className="text-base text-muted-foreground mb-8 max-w-xl mx-auto">
                 Join hundreds of Science Olympiad teams already using Teamy to streamline 
                 their operations and elevate their programs.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link href="/login">
-                  <Button size="lg" className="gap-2">
-                    Get Started Free
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
                 <Link href="/features">
                   <Button variant="outline" size="lg">
                     Explore Features

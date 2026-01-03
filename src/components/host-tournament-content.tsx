@@ -316,7 +316,7 @@ export function HostTournamentContent({ isAuthenticated: initialIsAuthenticated 
             Hosting a Tournament
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Host your Science Olympiad tournament on Teamy. Our platform streamlines every aspect of tournament management, all in one place.
+            Our platform streamlines every aspect of tournament management, all in one place
           </p>
         </div>
 
@@ -420,7 +420,6 @@ export function HostTournamentContent({ isAuthenticated: initialIsAuthenticated 
         <Card className="border-2 border-teamy-primary/20 bg-gradient-to-br from-teamy-primary/5 to-transparent">
           <CardHeader className="text-center pb-4 px-4 sm:px-6">
             <CardTitle className="text-xl sm:text-2xl font-bold flex items-center justify-center gap-2 flex-wrap">
-              <Trophy className="h-5 w-5 sm:h-6 sm:w-6 text-teamy-primary" />
               Process
             </CardTitle>
           </CardHeader>

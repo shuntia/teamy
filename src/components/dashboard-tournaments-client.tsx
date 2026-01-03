@@ -32,7 +32,7 @@ interface TournamentRequest {
 }
 
 interface DashboardTournamentsClientProps {
-  user: {
+  user?: {
     id: string
     name?: string | null
     email: string
@@ -195,17 +195,22 @@ export function DashboardTournamentsClient({ user }: DashboardTournamentsClientP
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 grid-pattern">
-      <AppHeader user={user} />
-      <div className="relative z-10 container mx-auto px-4 py-8 max-w-7xl">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-4xl font-bold text-foreground mb-2">Tournaments</h1>
-            <p className="text-muted-foreground">
-              Discover approved Science Olympiad tournaments
-            </p>
+    <>
+      {/* Show AppHeader only when user is provided (used in dashboard context) */}
+      {user && <AppHeader user={user} />}
+      
+      <div className={user ? "relative z-10 container mx-auto px-4 py-8 max-w-7xl" : ""}>
+        {/* Show title/description only when user is provided (dashboard context) */}
+        {user && (
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-4xl font-bold text-foreground mb-2">Tournaments</h1>
+              <p className="text-muted-foreground">
+                Discover approved Science Olympiad tournaments
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Filters */}
         <div className="space-y-4 mb-6">
@@ -316,6 +321,6 @@ export function DashboardTournamentsClient({ user }: DashboardTournamentsClientP
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

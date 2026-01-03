@@ -51,25 +51,6 @@ export default function FeaturesPage() {
       <div className="py-6 sm:py-12 px-4 sm:px-6">
         {/* Scroll-driven feature showcase with header and footer */}
         <ScrollDrivenFeatures features={heroFeatures} />
-        
-        {/* CTA at the bottom */}
-        <div className="max-w-6xl mx-auto mt-12 sm:mt-20">
-          <ScrollAnimate animation="bounce-in" delay={200}>
-            <div className="text-center">
-              <a href="/login">
-                <button className="group relative px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold bg-teamy-primary text-white rounded-full shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-105 overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-teamy-primary-dark to-teamy-primary opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <span className="relative z-10 flex items-center gap-2">
-                    Get started
-                    <svg className="h-4 w-4 sm:h-5 sm:w-5 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </span>
-                </button>
-              </a>
-            </div>
-          </ScrollAnimate>
-        </div>
       </div>
     </PublicPageLayout>
   )

@@ -237,7 +237,7 @@ export function CustomizationClient({ user, preferences }: CustomizationClientPr
   
   // Determine back destination based on where user came from
   const from = searchParams.get('from')
-  const backHref = from === 'tournaments' ? '/dashboard/tournaments' : '/dashboard/club'
+  const backHref = '/dashboard'
 
   const defaultColors = {
     backgroundColor: '#f8fafc',

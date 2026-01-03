@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { LogOut, Pencil, ArrowLeft, Users, Trophy, Settings, CreditCard, ChevronDown } from 'lucide-react'
+import { LogOut, Pencil, ArrowLeft, Settings, CreditCard, ChevronDown } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,19 +35,13 @@ export function AppHeader({ user, showBackButton = false, backHref, title }: App
   const [editUsernameOpen, setEditUsernameOpen] = useState(false)
   const [currentUserName, setCurrentUserName] = useState(user.name ?? null)
   
-  // Determine if we're on tournaments page or clubs page
-  const isOnTournamentsPage = pathname?.startsWith('/dashboard/tournaments') || pathname?.startsWith('/tournaments')
-  const buttonText = isOnTournamentsPage ? 'Clubs' : 'Tournaments'
-  const buttonHref = isOnTournamentsPage ? '/dashboard/club' : '/dashboard/tournaments'
-  const ButtonIcon = isOnTournamentsPage ? Users : Trophy
-  
   // Show customization and billing only on club dashboard pages (not tournament pages)
-  const isOnClubDashboard = pathname?.startsWith('/dashboard/club') ||
+  const isOnClubDashboard = pathname?.startsWith('/dashboard') ||
                             pathname === '/dashboard/customization' || 
                             pathname === '/dashboard/billing'
   const isOnESPortal = pathname?.startsWith('/es')
   const isOnTDPortal = pathname?.startsWith('/td')
-  const showCustomizationBilling = isOnClubDashboard && !isOnTournamentsPage && !isOnESPortal && !isOnTDPortal
+  const showCustomizationBilling = isOnClubDashboard && !isOnESPortal && !isOnTDPortal
 
   const handleSignOut = async () => {
     try {
@@ -78,20 +72,12 @@ export function AppHeader({ user, showBackButton = false, backHref, title }: App
                 {title}
               </h1>
             )}
-            <div className="hidden md:block h-6 w-px bg-white/20 mx-1" />
-            <Button
-              onClick={() => router.push(buttonHref)}
-              size="sm"
-              className="hidden md:flex items-center gap-2 px-4 bg-white/20 hover:bg-white/30 text-white"
-            >
-              <ButtonIcon className="h-4 w-4" />
-              <span className="text-sm font-medium">{buttonText}</span>
-            </Button>
             {showCustomizationBilling && (
               <>
+                <div className="hidden md:block h-6 w-px bg-white/20 mx-1" />
                 <button
                   onClick={() => {
-                    const from = isOnTournamentsPage ? 'tournaments' : 'clubs'
+                    const from = 'clubs'
                     router.push(`/dashboard/customization?from=${from}`)
                   }}
                   className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors rounded-lg ${
@@ -105,7 +91,7 @@ export function AppHeader({ user, showBackButton = false, backHref, title }: App
                 </button>
                 <button
                   onClick={() => {
-                    const from = isOnTournamentsPage ? 'tournaments' : 'clubs'
+                    const from = 'clubs'
                     router.push(`/dashboard/billing?from=${from}`)
                   }}
                   className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors rounded-lg ${
@@ -122,13 +108,6 @@ export function AppHeader({ user, showBackButton = false, backHref, title }: App
           </div>
           
           <div className="flex items-center gap-2 md:gap-3">
-            <Button
-              onClick={() => router.push(buttonHref)}
-              size="icon"
-              className="md:hidden bg-white/20 hover:bg-white/30 text-white h-9 w-9"
-            >
-              <ButtonIcon className="h-4 w-4" />
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 sm:gap-3 outline-none">
@@ -158,7 +137,7 @@ export function AppHeader({ user, showBackButton = false, backHref, title }: App
                   <>
                     <DropdownMenuItem 
                       onClick={() => {
-                        const from = isOnTournamentsPage ? 'tournaments' : 'clubs'
+                        const from = 'clubs'
                         router.push(`/dashboard/customization?from=${from}`)
                       }} 
                       className="md:hidden"
@@ -168,7 +147,7 @@ export function AppHeader({ user, showBackButton = false, backHref, title }: App
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => {
-                        const from = isOnTournamentsPage ? 'tournaments' : 'clubs'
+                        const from = 'clubs'
                         router.push(`/dashboard/billing?from=${from}`)
                       }} 
                       className="md:hidden"
