@@ -172,12 +172,12 @@ export default async function TournamentTestResultsPage({
       ...attemptData,
       gradeEarned: null,
       proctoringScore: null,
-      answers: null,
+      answers: null as any,
     }
   } else if (scoreReleaseMode === 'SCORE_ONLY') {
     filteredAttempt = {
       ...attemptData,
-      answers: null,
+      answers: null as any,
     }
   } else if (scoreReleaseMode === 'SCORE_WITH_WRONG') {
     filteredAttempt = {
