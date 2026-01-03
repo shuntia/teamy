@@ -545,7 +545,6 @@ export function GalleryTab({ clubId, user, isAdmin }: GalleryTabProps) {
         cancelText="Cancel"
         variant="destructive"
         onConfirm={handleDeleteMedia}
-        loading={deletingMedia}
       />
 
       {/* Delete Album Confirmation Dialog */}
@@ -558,7 +557,6 @@ export function GalleryTab({ clubId, user, isAdmin }: GalleryTabProps) {
         cancelText="Cancel"
         variant="destructive"
         onConfirm={handleDeleteAlbum}
-        loading={deletingAlbum}
       />
     </div>
   )

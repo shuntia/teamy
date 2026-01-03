@@ -39,7 +39,7 @@ export async function createAuditLog({
         userName: userName || null,
         action,
         target: target || null,
-        details: details || null,
+        details: details || undefined,
         ipAddress,
         userAgent,
       },

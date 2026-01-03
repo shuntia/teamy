@@ -491,7 +491,6 @@ export function PaperworkTab({ clubId, user, isAdmin }: PaperworkTabProps) {
         cancelText="Cancel"
         variant="destructive"
         onConfirm={handleDeleteForm}
-        loading={deletingForm}
       />
     </div>
   )

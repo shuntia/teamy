@@ -858,19 +858,19 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
                                         const availability = checkTestAvailability(test)
                                         // For ESTest, check if user can view results
                                         // Debug logging to help diagnose issues
-                                        if (process.env.NODE_ENV === 'development' && test.isESTest) {
+                                        if (process.env.NODE_ENV === 'development' && (test as any).isESTest) {
                                           console.log(`[Testing Portal] Test ${test.id} (${test.name}):`, {
-                                            isESTest: test.isESTest,
-                                            canViewResults: test.canViewResults,
-                                            hasCompletedAttempt: test.hasCompletedAttempt,
-                                            scoresReleased: test.scoresReleased,
+                                            isESTest: (test as any).isESTest,
+                                            canViewResults: (test as any).canViewResults,
+                                            hasCompletedAttempt: (test as any).hasCompletedAttempt,
+                                            scoresReleased: (test as any).scoresReleased,
                                           })
                                         }
                                         // Check if tournament has ended
-                                        const tournamentEnded = test.tournamentEnded === true
+                                        const tournamentEnded = (test as any).tournamentEnded === true
                                         
                                         // If scores are released and user can view results, show View Results button (for both ESTest and regular tests)
-                                        if (test.canViewResults) {
+                                        if ((test as any).canViewResults) {
                                           return (
                                             <div className="flex flex-col items-end gap-2">
                                               <Link href={`/testing/tests/${test.id}/results`}>
@@ -1234,19 +1234,19 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
                                         const availability = checkTestAvailability(test)
                                         // For ESTest, check if user can view results
                                         // Debug logging to help diagnose issues
-                                        if (process.env.NODE_ENV === 'development' && test.isESTest) {
+                                        if (process.env.NODE_ENV === 'development' && (test as any).isESTest) {
                                           console.log(`[Testing Portal] Test ${test.id} (${test.name}):`, {
-                                            isESTest: test.isESTest,
-                                            canViewResults: test.canViewResults,
-                                            hasCompletedAttempt: test.hasCompletedAttempt,
-                                            scoresReleased: test.scoresReleased,
+                                            isESTest: (test as any).isESTest,
+                                            canViewResults: (test as any).canViewResults,
+                                            hasCompletedAttempt: (test as any).hasCompletedAttempt,
+                                            scoresReleased: (test as any).scoresReleased,
                                           })
                                         }
                                         // Check if tournament has ended
-                                        const tournamentEnded = test.tournamentEnded === true
+                                        const tournamentEnded = (test as any).tournamentEnded === true
                                         
                                         // If scores are released and user can view results, show View Results button (for both ESTest and regular tests)
-                                        if (test.canViewResults) {
+                                        if ((test as any).canViewResults) {
                                           return (
                                             <div className="flex flex-col items-end gap-2">
                                               <Link href={`/testing/tests/${test.id}/results`}>
@@ -1599,7 +1599,7 @@ export function TestingPortalClient({ user }: TestingPortalClientProps) {
                               {(() => {
                                 const availability = checkTestAvailability(test)
                                 // Check if tournament has ended
-                                const tournamentEnded = test.tournamentEnded === true
+                                const tournamentEnded = (test as any).tournamentEnded === true
                                 
                                 // If tournament has ended, don't show Take Test button
                                 if (tournamentEnded) {

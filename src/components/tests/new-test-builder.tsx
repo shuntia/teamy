@@ -374,8 +374,8 @@ export function NewTestBuilder({
   }
 
   const [publishFormData, setPublishFormData] = useState({
-    startAt: test?.startAt ? formatDateTimeLocal(test.startAt) : '',
-    endAt: test?.endAt ? formatDateTimeLocal(test.endAt) : '',
+    startAt: (test as any)?.startAt ? formatDateTimeLocal((test as any).startAt) : '',
+    endAt: (test as any)?.endAt ? formatDateTimeLocal((test as any).endAt) : '',
     testPassword: '',
     testPasswordConfirm: '',
     releaseScoresAt: '',
@@ -383,7 +383,7 @@ export function NewTestBuilder({
     scoreReleaseMode: (test?.scoreReleaseMode || 'FULL_TEST') as 'NONE' | 'SCORE_ONLY' | 'SCORE_WITH_WRONG' | 'FULL_TEST',
     requireFullscreen: test?.requireFullscreen !== undefined ? test.requireFullscreen : true,
   })
-  const [hasFixedWindow, setHasFixedWindow] = useState(test?.startAt !== null && test?.startAt !== undefined && test?.endAt !== null && test?.endAt !== undefined)
+  const [hasFixedWindow, setHasFixedWindow] = useState((test as any)?.startAt !== null && (test as any)?.startAt !== undefined && (test as any)?.endAt !== null && (test as any)?.endAt !== undefined)
   const [dateTimeErrors, setDateTimeErrors] = useState<{ startAt?: string; endAt?: string }>({})
 
   const isEditMode = !!test

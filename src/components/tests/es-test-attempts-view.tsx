@@ -529,7 +529,7 @@ export function ESTestAttemptsView({ testId, testName, scoresReleased: initialSc
                                   </Badge>
                                 )}
                               </div>
-                              <QuestionPrompt prompt={answer.question.promptMd} />
+                              <QuestionPrompt promptMd={answer.question.promptMd} />
                             </div>
                           </div>
 
