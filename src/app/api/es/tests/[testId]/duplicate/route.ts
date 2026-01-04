@@ -3,68 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-// Helper to check if user has access to an ES test
-async function hasESAccess(userId: string, userEmail: string, testId: string): Promise<boolean> {
-  const test = await prisma.eSTest.findUnique({
-    where: { id: testId },
-    select: { tournamentId: true, eventId: true },
-  })
-
-  if (!test) return false
-
-  // Check if user is a tournament director
-  const isTD = await (async () => {
-    const admin = await prisma.tournamentAdmin.findUnique({
-      where: {
-        tournamentId_userId: {
-          tournamentId: test.tournamentId,
-          userId,
-        },
-      },
-    })
-    if (admin) return true
-
-    const tournament = await prisma.tournament.findUnique({
-      where: { id: test.tournamentId },
-      select: { createdById: true },
-    })
-    if (tournament?.createdById === userId) return true
-
-    const hostingRequest = await prisma.tournamentHostingRequest.findFirst({
-      where: {
-        tournament: { id: test.tournamentId },
-        directorEmail: { equals: userEmail, mode: 'insensitive' },
-        status: 'APPROVED',
-      },
-    })
-    return !!hostingRequest
-  })()
-
-  if (isTD) return true
-
-  // Check if user is ES assigned to this event
-  const staffMemberships = await prisma.tournamentStaff.findMany({
-    where: {
-      OR: [{ userId }, { email: { equals: userEmail, mode: 'insensitive' } }],
-      status: 'ACCEPTED',
-      tournamentId: test.tournamentId,
-    },
-    include: {
-      events: {
-        select: { eventId: true },
-      },
-    },
-  })
-
-  if (test.eventId) {
-    return staffMemberships.some(staff => 
-      staff.events.some(e => e.eventId === test.eventId)
-    )
-  }
-
-  // For trial events, any ES staff member with access to tournament can access
-  return staffMemberships.length > 0
-}
+import { hasESTestAccess } from '@/lib/rbac'
 
 // POST /api/es/tests/[testId]/duplicate
 export async function POST(
@@ -98,8 +37,8 @@ export async function POST(
       return NextResponse.json({ error: 'Test not found' }, { status: 404 })
     }
 
-    // Check access
-    const hasAccess = await hasESAccess(session.user.id, session.user.email, resolvedParams.testId)
+    // Check access - TDs have full access, ES only for their assigned events
+    const hasAccess = await hasESTestAccess(session.user.id, session.user.email, resolvedParams.testId)
     if (!hasAccess) {
       return NextResponse.json(
         { error: 'Only authorized users can duplicate tests' },

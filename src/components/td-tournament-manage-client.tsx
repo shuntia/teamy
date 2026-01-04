@@ -1716,7 +1716,7 @@ export function TDTournamentManageClient({
                           Invite Staff
                         </Button>
                       </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>Invite Staff Member</DialogTitle>
                         <DialogDescription>

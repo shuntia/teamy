@@ -12,11 +12,11 @@ interface Props {
   params: Promise<{ testId: string }>
 }
 
-export default async function TDTestResponsesPage({ params }: Props) {
+export default async function ESTestResponsesPage({ params }: Props) {
   const session = await getServerSession(authOptions)
 
   if (!session?.user?.email) {
-    redirect('/td')
+    redirect('/es')
   }
 
   const { testId } = await params
@@ -54,7 +54,7 @@ export default async function TDTestResponsesPage({ params }: Props) {
   const isAdmin = await isTournamentAdmin(session.user.id, esTest.tournamentId)
   
   if (!hasAccess && !isAdmin) {
-    redirect('/td')
+    redirect('/es')
   }
 
   // Get tournament info
@@ -71,7 +71,7 @@ export default async function TDTestResponsesPage({ params }: Props) {
     })
     
     if (!tournamentData) {
-      redirect('/td')
+      redirect('/es')
     }
     
     tournament = tournamentData
@@ -83,7 +83,7 @@ export default async function TDTestResponsesPage({ params }: Props) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2">
             <Link 
-              href={`/td/tournament/${tournament.id}`}
+              href={`/es?tournament=${tournament.id}`}
               className="w-fit"
             >
               <Button variant="ghost" size="sm" className="h-8 gap-2 px-2">
@@ -107,3 +107,4 @@ export default async function TDTestResponsesPage({ params }: Props) {
     </div>
   )
 }
+

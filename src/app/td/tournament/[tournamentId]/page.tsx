@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect, notFound } from 'next/navigation'
 import { TDTournamentManageClient } from '@/components/td-tournament-manage-client'
+import { hasESAccess } from '@/lib/rbac'
 
 interface Props {
   params: Promise<{ tournamentId: string }>
@@ -16,56 +17,20 @@ export default async function TournamentManagePage({ params }: Props) {
     redirect('/td')
   }
 
-  // Verify the user has access to this tournament
-  // Check both hosting request and staff records
-  const request = await prisma.tournamentHostingRequest.findFirst({
-    where: {
-      directorEmail: {
-        equals: session.user.email,
-        mode: 'insensitive',
-      },
-      status: 'APPROVED',
-      tournament: {
-        id: tournamentId,
-      },
-    },
-    include: {
-      tournament: true,
-    },
-  })
-
-  // Also check if user is a TD via TournamentStaff
-  const staffRecord = await prisma.tournamentStaff.findFirst({
-    where: {
-      tournamentId,
-      role: 'TOURNAMENT_DIRECTOR',
-      status: 'ACCEPTED',
-      OR: [
-        { userId: session.user.id },
-        {
-          email: {
-            equals: session.user.email,
-            mode: 'insensitive',
-          },
-        },
-      ],
-    },
-  })
-
-  // If no request and no staff record, user doesn't have access
-  if (!request && !staffRecord) {
+  // Verify the user has access to this tournament (TD or ES)
+  const hasAccess = await hasESAccess(session.user.id, session.user.email, tournamentId)
+  
+  if (!hasAccess) {
     notFound()
   }
 
-  // If we have a staff record but no request, we still need tournament data
-  let tournament = request?.tournament
+  // Get tournament data
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+  })
+  
   if (!tournament) {
-    tournament = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-    })
-    if (!tournament) {
-      notFound()
-    }
+    notFound()
   }
 
   // Fetch staff for this tournament

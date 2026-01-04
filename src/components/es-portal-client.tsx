@@ -22,6 +22,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { EditUsernameDialog } from '@/components/edit-username-dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { NoteSheetReview } from '@/components/tests/note-sheet-review'
 import { 
   ClipboardList,
   LogOut, 
@@ -41,6 +43,9 @@ import {
   Search,
   Pencil,
   RefreshCw,
+  Eye,
+  Copy,
+  Settings,
 } from 'lucide-react'
 import { format, isPast, isToday } from 'date-fns'
 import Link from 'next/link'
@@ -53,6 +58,7 @@ interface Test {
   eventId: string | null
   createdAt: string
   updatedAt: string
+  allowNoteSheet?: boolean
   event?: {
     id: string
     name: string
@@ -205,6 +211,7 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
   const [eventFilter, setEventFilter] = useState<string>('all')
   const [editUsernameOpen, setEditUsernameOpen] = useState(false)
   const [currentUserName, setCurrentUserName] = useState(user.name ?? null)
+  const [noteSheetReviewOpen, setNoteSheetReviewOpen] = useState<string | null>(null)
   const { toast } = useToast()
 
   // Load saved content tab from localStorage on mount and mark as hydrated
@@ -287,6 +294,34 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
       })
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleDuplicateTest = async (testId: string) => {
+    try {
+      const response = await fetch(`/api/es/tests/${testId}/duplicate`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to duplicate test')
+      }
+
+      toast({
+        title: 'Test Duplicated',
+        description: 'The test has been duplicated as a draft.',
+      })
+
+      // Refresh tests list
+      fetchTests(true)
+    } catch (error: any) {
+      console.error('Failed to duplicate test:', error)
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to duplicate test',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -757,25 +792,85 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
                                                     )}
                                                   </div>
                                                 </div>
-                                                <div className="flex gap-2">
-                                                  {test.status !== 'PUBLISHED' && (
-                                                    <Link href={`/es/tests/${test.id}`}>
-                                                      <Button variant="outline" size="sm">
-                                                        <Edit className="h-4 w-4 mr-1" />
-                                                        Edit
-                                                      </Button>
-                                                    </Link>
-                                                  )}
-                                                  <Button 
-                                                    variant="outline" 
-                                                    size="sm"
-                                                    onClick={() => handleDeleteClick(test)}
-                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
-                                                  >
-                                                    <Trash2 className="h-4 w-4 mr-1" />
-                                                    Delete
-                                                  </Button>
-                                                </div>
+                                                <TooltipProvider>
+                                                  <div className="flex gap-2">
+                                                    {test.status !== 'PUBLISHED' && (
+                                                      <Link href={`/es/tests/${test.id}`}>
+                                                        <Button variant="outline" size="sm">
+                                                          <Edit className="h-4 w-4 mr-1" />
+                                                          Edit
+                                                        </Button>
+                                                      </Link>
+                                                    )}
+                                                    {test.status === 'PUBLISHED' && (
+                                                      <Link href={`/es/tests/${test.id}/responses`}>
+                                                        <Button variant="outline" size="sm">
+                                                          <Eye className="h-4 w-4 mr-1" />
+                                                          Responses
+                                                        </Button>
+                                                      </Link>
+                                                    )}
+                                                    {test.allowNoteSheet && (
+                                                      <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                          <Button 
+                                                            variant="outline" 
+                                                            size="sm"
+                                                            onClick={() => setNoteSheetReviewOpen(test.id)}
+                                                          >
+                                                            <FileText className="h-4 w-4" />
+                                                          </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                          <p>Note Sheets</p>
+                                                        </TooltipContent>
+                                                      </Tooltip>
+                                                    )}
+                                                    <Tooltip>
+                                                      <TooltipTrigger asChild>
+                                                        <Button 
+                                                          variant="outline" 
+                                                          size="sm"
+                                                          onClick={() => handleDuplicateTest(test.id)}
+                                                        >
+                                                          <Copy className="h-4 w-4" />
+                                                        </Button>
+                                                      </TooltipTrigger>
+                                                      <TooltipContent>
+                                                        <p>Duplicate</p>
+                                                      </TooltipContent>
+                                                    </Tooltip>
+                                                    {test.status === 'PUBLISHED' && (
+                                                      <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                          <Link href={`/es/tests/${test.id}/settings`}>
+                                                            <Button variant="outline" size="sm">
+                                                              <Settings className="h-4 w-4" />
+                                                            </Button>
+                                                          </Link>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                          <p>Settings</p>
+                                                        </TooltipContent>
+                                                      </Tooltip>
+                                                    )}
+                                                    <Tooltip>
+                                                      <TooltipTrigger asChild>
+                                                        <Button 
+                                                          variant="outline" 
+                                                          size="sm"
+                                                          onClick={() => handleDeleteClick(test)}
+                                                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+                                                        >
+                                                          <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                      </TooltipTrigger>
+                                                      <TooltipContent>
+                                                        <p>Delete</p>
+                                                      </TooltipContent>
+                                                    </Tooltip>
+                                                  </div>
+                                                </TooltipProvider>
                                               </div>
                                             ))}
                                           </div>
@@ -1002,6 +1097,23 @@ export function ESPortalClient({ user, staffMemberships, initialTimelines = {}, 
         currentName={currentUserName}
         onNameUpdated={setCurrentUserName}
       />
+
+      {/* Note Sheet Review Dialog */}
+      {noteSheetReviewOpen && (
+        <NoteSheetReview
+          open={!!noteSheetReviewOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setNoteSheetReviewOpen(null)
+            }
+          }}
+          testId={noteSheetReviewOpen}
+          testName={
+            staffMembershipsWithTests
+              .flatMap(m => m.events.flatMap(e => e.tests || []))
+              .find(t => t.id === noteSheetReviewOpen)?.name || 'Test'}
+        />
+      )}
     </div>
   )
 }

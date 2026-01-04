@@ -43,11 +43,11 @@ function SettingToggle({ label, enabled, note }: { label: string; enabled: boole
   )
 }
 
-export default async function TDTestSettingsPage({ params }: Props) {
+export default async function ESTestSettingsPage({ params }: Props) {
   const session = await getServerSession(authOptions)
 
   if (!session?.user?.email) {
-    redirect('/td')
+    redirect('/es')
   }
 
   const { testId } = await params
@@ -106,7 +106,7 @@ export default async function TDTestSettingsPage({ params }: Props) {
   const isAdmin = await isTournamentAdmin(session.user.id, esTest.tournamentId)
   
   if (!hasAccess && !isAdmin) {
-    redirect('/td')
+    redirect('/es')
   }
 
   // Get tournament info
@@ -120,7 +120,7 @@ export default async function TDTestSettingsPage({ params }: Props) {
   })
 
   if (!tournament) {
-    redirect('/td')
+    redirect('/es')
   }
 
   // Safely access new fields that might not exist yet
@@ -134,7 +134,7 @@ export default async function TDTestSettingsPage({ params }: Props) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2">
             <Link 
-              href={`/td/tournament/${tournament.id}`}
+              href={`/es?tournament=${tournament.id}`}
               className="w-fit"
             >
               <Button variant="ghost" size="sm" className="h-8 gap-2 px-2">
@@ -360,3 +360,4 @@ export default async function TDTestSettingsPage({ params }: Props) {
     </div>
   )
 }
+

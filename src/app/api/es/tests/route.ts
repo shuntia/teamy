@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { CalculatorType, Division } from '@prisma/client'
+import { hasESAccess, hasESTestAccess } from '@/lib/rbac'
 
 // Helper to check if user is a tournament director for a tournament
 async function isTournamentDirector(userId: string, userEmail: string, tournamentId: string): Promise<boolean> {
@@ -406,6 +407,7 @@ export async function GET(request: NextRequest) {
           eventId: true,
           createdAt: true,
           updatedAt: true,
+          allowNoteSheet: true,
           event: {
             select: {
               id: true,
@@ -644,6 +646,7 @@ export async function GET(request: NextRequest) {
               eventId: test.eventId,
               createdAt: test.createdAt.toISOString(),
               updatedAt: test.updatedAt.toISOString(),
+              allowNoteSheet: test.allowNoteSheet ?? false,
               event: test.event ? {
                 id: test.event.id,
                 name: test.event.name,
@@ -1044,34 +1047,23 @@ export async function PUT(request: NextRequest) {
       },
     })
 
-    // Check if user is a tournament director for this tournament first
-    // (TDs might not have staff memberships)
-    const isTD = await isTournamentDirector(session.user.id, session.user.email, existingTest.tournamentId)
+    // Check if user has ES access (TD or ES) for this tournament
+    const hasAccess = await hasESAccess(session.user.id, session.user.email, existingTest.tournamentId)
+    
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    }
 
     // Get the staff member who is making the edit
     let editingStaff: { id: string } | null = null
     
-    if (isTD) {
-      // For TDs, find or use the first staff membership, or use the test's current staff
-      editingStaff = existingTest.staffId ? { id: existingTest.staffId } : null
-    } else {
-      // For non-TDs, check staff membership and event access
-      if (!userStaffMemberships || userStaffMemberships.length === 0) {
-        return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
-      }
-
-      // Check if user is assigned to the same event as the test (collaborative access)
-      // User must be assigned to the event in at least one of their staff memberships
-      const hasEventAccess = existingTest.eventId && userStaffMemberships.some(staff => 
-        staff.events.some(e => e.eventId === existingTest.eventId)
-      )
-
-      if (!hasEventAccess) {
-        return NextResponse.json({ error: 'Not authorized to edit this test' }, { status: 403 })
-      }
-
+    // Find a staff membership for this user in this tournament
+    if (userStaffMemberships && userStaffMemberships.length > 0) {
       // Use the first matching staff membership
-      editingStaff = userStaffMemberships[0] ? { id: userStaffMemberships[0].id } : null
+      editingStaff = { id: userStaffMemberships[0].id }
+    } else {
+      // Fallback to test's current staff if no membership found
+      editingStaff = existingTest.staffId ? { id: existingTest.staffId } : null
     }
 
     if (!editingStaff) {
@@ -1419,59 +1411,20 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     }
 
-    // Check if user is assigned to the same event as the test (collaborative access)
-    // OR if user is a tournament director for this tournament
-    // User must be assigned to the event in at least one of their staff memberships
-    const hasEventAccess = existingTest.eventId && userStaffMemberships.some(staff => 
-      staff.events.some(e => e.eventId === existingTest.eventId)
-    )
+    // Check if user has access to this specific test
+    // TDs have full access, ES only for their assigned events
+    const hasAccess = await hasESTestAccess(session.user.id, session.user.email, testId)
 
-    // Check if user is a tournament director for this tournament
-    const isTournamentDirector = await (async () => {
-      // Check tournament admin table
-      const admin = await prisma.tournamentAdmin.findUnique({
-        where: {
-          tournamentId_userId: {
-            tournamentId: existingTest.tournamentId,
-            userId: session.user.id,
-          },
-        },
-      })
-      if (admin) return true
-
-      // Check if user created the tournament
-      const tournament = await prisma.tournament.findUnique({
-        where: { id: existingTest.tournamentId },
-        select: { createdById: true },
-      })
-      if (tournament?.createdById === session.user.id) return true
-
-      // Check if user is director on hosting request
-      const hostingRequest = await prisma.tournamentHostingRequest.findFirst({
-        where: {
-          tournament: {
-            id: existingTest.tournamentId,
-          },
-          directorEmail: {
-            equals: session.user.email,
-            mode: 'insensitive',
-          },
-          status: 'APPROVED',
-        },
-      })
-      return !!hostingRequest
-    })()
-
-    if (!hasEventAccess && !isTournamentDirector) {
+    if (!hasAccess) {
       return NextResponse.json({ error: 'Not authorized to delete this test' }, { status: 403 })
     }
 
     // Get staff member for audit log
     let deletingStaff: { id: string } | null = null
-    if (isTournamentDirector) {
-      deletingStaff = existingTest.staffId ? { id: existingTest.staffId } : null
-    } else if (userStaffMemberships && userStaffMemberships.length > 0) {
+    if (userStaffMemberships && userStaffMemberships.length > 0) {
       deletingStaff = { id: userStaffMemberships[0].id }
+    } else {
+      deletingStaff = existingTest.staffId ? { id: existingTest.staffId } : null
     }
 
     if (!deletingStaff) {
