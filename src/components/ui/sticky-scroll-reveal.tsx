@@ -24,18 +24,21 @@ export const StickyScroll = ({
   const cardLength = content.length;
 
   useMotionValueEvent(scrollYProgress, "change", (latest) => {
-    const cardsBreakpoints = content.map((_, index) => index / cardLength);
-    const closestBreakpointIndex = cardsBreakpoints.reduce(
-      (acc, breakpoint, index) => {
-        const distance = Math.abs(latest - breakpoint);
-        if (distance < Math.abs(latest - cardsBreakpoints[acc])) {
-          return index;
-        }
-        return acc;
-      },
-      0
-    );
-    setActiveCard(closestBreakpointIndex);
+    // Calculate which card should be active based on scroll progress
+    // Divide the scroll range into equal segments for each card
+    // Adjust so the last card gets equal visibility
+    const segmentSize = 1 / cardLength;
+    let newActiveCard = Math.floor(latest / segmentSize);
+    
+    // Special handling: if we're in the last 10% of scroll, show the last card
+    if (latest >= 1 - segmentSize) {
+      newActiveCard = cardLength - 1;
+    }
+    
+    // Clamp to valid range
+    newActiveCard = Math.max(0, Math.min(cardLength - 1, newActiveCard));
+    
+    setActiveCard(newActiveCard);
   });
 
   const linearGradients = [
@@ -60,7 +63,7 @@ export const StickyScroll = ({
       <div className="relative flex items-start px-4 lg:flex-1">
         <div className="max-w-2xl w-full">
           {content.map((item, index) => (
-            <div key={item.title + index} className="min-h-[300px] flex flex-col justify-center">
+            <div key={item.title + index} className="h-[250px] flex flex-col justify-center">
               <motion.h2
                 initial={{
                   opacity: 0,
