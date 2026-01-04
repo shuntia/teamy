@@ -786,6 +786,13 @@ export function HostTournamentContent({ isAuthenticated: initialIsAuthenticated 
                           />
                         </div>
 
+                        {/* Disclaimer */}
+                        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                            <strong>Please note:</strong> We will fact-check your responses before approving your tournament request. There is no guarantee that your tournament will be approved.
+                          </p>
+                        </div>
+
                         {/* Submit Button */}
                         <div className="flex gap-4 pt-4">
                           <Button

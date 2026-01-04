@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const GRANTS_DISCORD_WEBHOOK_URL = process.env.GRANTS_DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/1449575763568492666/ZdIWh7knXhisID4Q7u9FvxU8tKb9H0hamk482XYjDq6dm6A-x-V0C63-4oaSPg0Vdc-c'
+const GRANTS_DISCORD_WEBHOOK_URL = process.env.GRANTS_DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/1457414413459128494/DH2L77mREnKKf2CGDCfiFRFP0iNfV5iBC-SmSVoWvwjrhaoQwGiF3aBJLXq4xF3y-_XI'
 
 export async function POST(request: Request) {
   try {
