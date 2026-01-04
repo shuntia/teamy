@@ -268,7 +268,7 @@ export default async function TournamentTakeTestPage({
         })),
       }
       tournamentId = esTest.tournament.id
-      eventId = esTest.eventId
+      eventId = esTest.event?.id || null
       isESTest = true
     } else {
       // Test not found as TournamentTest or ESTest

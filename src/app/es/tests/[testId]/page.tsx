@@ -56,7 +56,7 @@ export default async function ESEditTestPage({ params }: Props) {
     },
   })
 
-  if (!esTest || !esTest.eventId) {
+  if (!esTest || !esTest.event?.id) {
     notFound()
   }
 
@@ -132,13 +132,13 @@ export default async function ESEditTestPage({ params }: Props) {
   // Find a staff membership where user is assigned to the event AND tournament matches
   const userStaff = userStaffMemberships.find(staff => 
     staff.tournament.id === esTest.tournamentId &&
-    staff.events.some(e => e.eventId === esTest.eventId)
+    staff.events.some(e => e.eventId === esTest.event?.id)
   )
 
   // If no exact match, find any staff membership where user is assigned to the event
   // (allows cross-tournament collaboration if needed)
   const userStaffFallback = userStaff || userStaffMemberships.find(staff => 
-    staff.events.some(e => e.eventId === esTest.eventId)
+    staff.events.some(e => e.eventId === esTest.event?.id)
   )
 
   // If user is TD, find their staff membership for this tournament (or create access)

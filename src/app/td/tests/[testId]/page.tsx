@@ -115,7 +115,7 @@ export default async function TDEditTestPage({ params }: Props) {
     },
   })
 
-  if (!esTest || !esTest.eventId) {
+  if (!esTest || !esTest.event?.id) {
     notFound()
   }
 
