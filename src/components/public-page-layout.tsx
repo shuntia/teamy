@@ -24,7 +24,7 @@ async function getBannerSettings() {
       enabled: enabledSetting?.value === 'true',
       text: textSetting?.value || 'This website is still a work in progress! Please report any issues to teamysite@gmail.com',
       link: linkSetting?.value || '',
-      backgroundColor: bgSetting?.value || '#5865F2',
+      backgroundColor: bgSetting?.value || '#8B5CF6',
     }
   } catch (error) {
     console.error('Failed to fetch banner settings:', error)
@@ -32,7 +32,7 @@ async function getBannerSettings() {
       enabled: true,
       text: 'This website is still a work in progress! Please report any issues to teamysite@gmail.com',
       link: '',
-      backgroundColor: '#5865F2',
+      backgroundColor: '#8B5CF6',
     }
   }
 }

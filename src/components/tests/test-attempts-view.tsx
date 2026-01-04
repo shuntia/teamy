@@ -92,6 +92,7 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, any>>({})
   const [loadingAiSuggestions, setLoadingAiSuggestions] = useState(false)
   const [requestingAiGrading, setRequestingAiGrading] = useState<string | null>(null) // Track which part is loading: `${answerId}-${partIndex}` or `answerId` for whole question
+  const [enableAiSuggestions, setEnableAiSuggestions] = useState(true) // Default to checked
 
   useEffect(() => {
     fetchAttempts()
@@ -972,20 +973,32 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                   <h3 className="font-semibold text-lg">Responses</h3>
                   <div className="flex items-center gap-2">
                     {selectedAttempt.answers.some(a => a.question.type === 'SHORT_TEXT' || a.question.type === 'LONG_TEXT') && (
-                      <Button 
-                        onClick={() => handleRequestAiGrading('all')} 
-                        disabled={requestingAiGrading !== null}
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                      >
-                        {requestingAiGrading === 'all' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Sparkles className="h-4 w-4" />
-                        )}
-                        {requestingAiGrading === 'all' ? 'Generating...' : 'AI Grade All'}
-                      </Button>
+                      <>
+                        <div className="flex items-center gap-2 px-2">
+                          <Checkbox
+                            id="enable-ai-suggestions"
+                            checked={enableAiSuggestions}
+                            onCheckedChange={(checked) => setEnableAiSuggestions(checked === true)}
+                          />
+                          <Label htmlFor="enable-ai-suggestions" className="text-sm font-normal cursor-pointer">
+                            Enable AI Suggestions
+                          </Label>
+                        </div>
+                        <Button 
+                          onClick={() => handleRequestAiGrading('all')} 
+                          disabled={requestingAiGrading !== null}
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                        >
+                          {requestingAiGrading === 'all' ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                          {requestingAiGrading === 'all' ? 'Generating...' : 'AI Grade All'}
+                        </Button>
+                      </>
                     )}
                     <Button 
                       onClick={handleSaveGrades} 
@@ -1376,7 +1389,7 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                                                           className="w-28 h-10 text-sm font-semibold text-center"
                                                         />
                                                         <p className="text-[10px] text-muted-foreground">max: {part.points}</p>
-                                                        {partSuggestion && (
+                                                        {enableAiSuggestions && partSuggestion && (
                                                           <Button
                                                             size="sm"
                                                             variant="outline"
@@ -1391,7 +1404,7 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                                                         )}
                                                       </div>
                                                     </div>
-                                                    {partSuggestion && (
+                                                    {enableAiSuggestions && partSuggestion && (
                                                       <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800 space-y-2">
                                                         <div className="flex items-center gap-2">
                                                           <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400" />
@@ -1450,7 +1463,7 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                             )}
 
                             {/* AI Suggestion */}
-                            {aiSuggestions[answer.id] && (
+                            {enableAiSuggestions && aiSuggestions[answer.id] && (
                               <div className="p-5 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between pb-3 border-b border-purple-200 dark:border-purple-700">
                                   <div className="flex items-center gap-2.5">
