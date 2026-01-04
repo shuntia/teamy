@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { ArrowLeft, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react'
 import { QuestionPrompt } from '@/components/tests/question-prompt'
 
@@ -324,13 +325,116 @@ export function ViewResultsClient({
                         <CardTitle className="text-base">Question {index + 1}</CardTitle>
                         {answer.question && (
                           <div className="text-muted-foreground mt-1">
-                            <QuestionPrompt promptMd={answer.question.promptMd} className="text-sm" />
+                            {(() => {
+                              // Parse prompt to hide FRQ_PARTS section in header
+                              const promptMd = answer.question.promptMd || ''
+                              const frqPartsMatch = promptMd.match(/---FRQ_PARTS---\n\n([\s\S]+)$/)
+                              let mainContent = frqPartsMatch ? promptMd.substring(0, frqPartsMatch.index).trim() : promptMd
+                              
+                              // Check if this is a fill-in-the-blank question
+                              const hasBlanks = /\[blank\d*\]/.test(mainContent)
+                              
+                              // Split context and prompt if separated by ---
+                              const parts = mainContent.split('---').map(p => p.trim()).filter(p => p)
+                              const contextSection = parts.length > 1 ? parts[0] : ''
+                              const promptSection = parts.length > 1 ? parts[1] : mainContent
+                              
+                              return (
+                                <div className="space-y-2">
+                                  {contextSection && (
+                                    <div>
+                                      <p className="text-xs text-muted-foreground mb-1">Context/Stimulus</p>
+                                      <QuestionPrompt promptMd={contextSection} className="text-sm" />
+                                    </div>
+                                  )}
+                                  {promptSection && (
+                                    <div>
+                                      {contextSection && <p className="text-xs text-muted-foreground mb-1 mt-2">Question</p>}
+                                      {hasBlanks ? (() => {
+                                        // Parse fill-in-the-blank question to show inline blanks
+                                        const imageRegex = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g
+                                        const tableRegex = /(\|.+\|[\r\n]+\|[-:\s|]+\|[\r\n]+(?:\|.+\|(?:\r?\n(?!\r?\n))?)+)/g
+                                        
+                                        // Remove images and tables from text for blank processing
+                                        let textOnly = promptSection.replace(imageRegex, '').replace(tableRegex, '')
+                                        
+                                        // Split on blank markers
+                                        const normalizedText = textOnly.replace(/\[blank\d*\]/g, '[BLANK_MARKER]')
+                                        const textSegments: string[] = normalizedText.split('[BLANK_MARKER]')
+                                        
+                                        return (
+                                          <div className="space-y-2">
+                                            <div className="text-base leading-relaxed">
+                                              {textSegments.map((segment, index) => (
+                                                <span key={index} className="inline">
+                                                  {segment && (
+                                                    <span className="whitespace-pre-wrap">{segment}</span>
+                                                  )}
+                                                  {index < textSegments.length - 1 && (
+                                                    <Input
+                                                      type="text"
+                                                      value=""
+                                                      disabled
+                                                      className="inline-block w-auto min-w-[150px] max-w-[300px] mx-2 align-middle"
+                                                    />
+                                                  )}
+                                                </span>
+                                              ))}
+                                            </div>
+                                            {/* Render images and tables if they exist */}
+                                            {(() => {
+                                              const imageMatches: string[] = []
+                                              let match
+                                              while ((match = imageRegex.exec(promptSection)) !== null) {
+                                                imageMatches.push(match[0])
+                                              }
+                                              const tableMatches: string[] = []
+                                              while ((match = tableRegex.exec(promptSection)) !== null) {
+                                                tableMatches.push(match[0])
+                                              }
+                                              
+                                              if (imageMatches.length > 0 || tableMatches.length > 0) {
+                                                return (
+                                                  <div className="space-y-2">
+                                                    {imageMatches.map((img, idx) => (
+                                                      <div key={`img-${idx}`} className="my-3 rounded-md border border-input overflow-hidden bg-muted/30">
+                                                        <img
+                                                          src={img.match(/\(([^)]+)\)/)?.[1] || ''}
+                                                          alt={img.match(/\[([^\]]*)\]/)?.[1] || 'Image'}
+                                                          className="max-w-full max-h-96 object-contain block mx-auto"
+                                                        />
+                                                      </div>
+                                                    ))}
+                                                    {tableMatches.map((table, idx) => (
+                                                      <div key={`table-${idx}`} className="my-3 rounded-md border border-input overflow-hidden bg-muted/30 p-3">
+                                                        <QuestionPrompt promptMd={table} className="text-sm" />
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                )
+                                              }
+                                              return null
+                                            })()}
+                                          </div>
+                                        )
+                                      })() : (
+                                        <QuestionPrompt promptMd={promptSection} className="text-sm" />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </div>
                         )}
                         {answer.question.type.startsWith('MCQ') && answer.question.options && (
                           <div className="mt-3">
                             {answer.question.type === 'MCQ_SINGLE' ? (
-                              <RadioGroup value="" disabled className="space-y-2">
+                              <RadioGroup 
+                                value={answer.question.options.find((opt: any) => opt.isCorrect)?.id || ""} 
+                                disabled 
+                                className="space-y-2"
+                              >
                                 {answer.question.options.map((option: any) => (
                                   <div
                                     key={option.id}
@@ -361,7 +465,7 @@ export function ViewResultsClient({
                                         : 'border-border'
                                     }`}
                                   >
-                                    <Checkbox id={`preview-${option.id}`} disabled />
+                                    <Checkbox id={`preview-${option.id}`} checked={option.isCorrect} disabled />
                                     <Label htmlFor={`preview-${option.id}`} className="font-normal flex-1 cursor-default">
                                       {option.label}
                                     </Label>
@@ -476,13 +580,63 @@ export function ViewResultsClient({
                               <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">
                                 Your Answer
                               </p>
-                              <div className="whitespace-pre-wrap p-3 bg-muted/30 rounded border">
-                                {answer.answerText && answer.answerText.trim() ? (
-                                  answer.answerText
-                                ) : (
-                                  <span className="text-muted-foreground italic">No answer provided</span>
-                                )}
-                              </div>
+                              {(() => {
+                                // Check if this is a multipart FRQ
+                                const promptMd = answer.question.promptMd || ''
+                                const frqPartsMatch = promptMd.match(/---FRQ_PARTS---\n\n([\s\S]+)$/)
+                                
+                                if (frqPartsMatch && answer.answerText) {
+                                  // Parse FRQ parts
+                                  const partsText = frqPartsMatch[1]
+                                  const partRegex = /\[PART:([a-z]):(\d+(?:\.\d+)?)\]\n([\s\S]*?)(?=\n\n\[PART:|$)/g
+                                  const frqParts: Array<{ label: string; points: number; prompt: string }> = []
+                                  let match
+                                  
+                                  while ((match = partRegex.exec(partsText)) !== null) {
+                                    frqParts.push({
+                                      label: match[1],
+                                      points: parseFloat(match[2]),
+                                      prompt: match[3].trim(),
+                                    })
+                                  }
+                                  
+                                  if (frqParts.length > 0) {
+                                    // Parse answer text (stored as "part1 | part2 | part3")
+                                    const partAnswers = answer.answerText.split(' | ')
+                                    
+                                    return (
+                                      <div className="space-y-4">
+                                        {frqParts.map((part, partIdx) => (
+                                          <div key={partIdx} className="border-l-2 border-primary pl-4">
+                                            <p className="text-sm font-semibold mb-2">
+                                              Part {part.label}) ({part.points} points)
+                                            </p>
+                                            <p className="text-sm mb-2 text-muted-foreground whitespace-pre-wrap">{part.prompt}</p>
+                                            <div className="whitespace-pre-wrap p-3 bg-muted/30 rounded border min-h-[80px]">
+                                              {partAnswers[partIdx] && partAnswers[partIdx].trim() ? (
+                                                partAnswers[partIdx]
+                                              ) : (
+                                                <span className="text-muted-foreground italic">No answer provided</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )
+                                  }
+                                }
+                                
+                                // Fallback to single answer display
+                                return (
+                                  <div className="whitespace-pre-wrap p-3 bg-muted/30 rounded border">
+                                    {answer.answerText && answer.answerText.trim() ? (
+                                      answer.answerText
+                                    ) : (
+                                      <span className="text-muted-foreground italic">No answer provided</span>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </div>
                             
                             {/* Show grading status for ungraded FRQs */}

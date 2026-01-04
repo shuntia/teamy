@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { ButtonLoading } from '@/components/ui/loading-spinner'
 import {
   Dialog,
@@ -775,19 +776,56 @@ export function TakeTestClient({
                 
                 return (
                 <div key={question.id} className={`space-y-3 p-4 border rounded-lg ${markedForReview.has(question.id) ? 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/10' : ''}`}>
-                  {!isTextBlock && (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">Question {index + 1}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium">Question {index + 1}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {(() => {
+                          // Check if it's a text block
+                          if (isTextBlock) {
+                            return 'Text Block'
+                          }
+                          
+                          // Check if SHORT_TEXT is actually a fill-in-the-blank
+                          const promptText = question.promptMd || ''
+                          const isFillBlank = question.type === 'SHORT_TEXT' && /\[blank\d*\]/.test(promptText)
+                          
+                          if (question.type === 'MCQ_SINGLE') {
+                            // Check if it's True/False
+                            if (question.options && question.options.length === 2) {
+                              const optionLabels = question.options.map((opt: any) => opt.label.trim().toLowerCase())
+                              if (optionLabels.includes('true') && optionLabels.includes('false')) {
+                                return 'True or False'
+                              }
+                            }
+                            return 'Multiple Choice'
+                          } else if (question.type === 'MCQ_MULTI') {
+                            return 'Select All That Apply'
+                          } else if (question.type === 'LONG_TEXT') {
+                            return 'Free Response'
+                          } else if (isFillBlank) {
+                            return 'Fill in the Blank'
+                          } else if (question.type === 'SHORT_TEXT') {
+                            return 'Short Answer'
+                          } else if (question.type === 'NUMERIC') {
+                            return 'Numeric'
+                          } else {
+                            return question.type.replace('MCQ_', '').replace('_', ' ')
+                          }
+                        })()}
+                      </Badge>
+                      {!isTextBlock && (
                         <span className="text-sm text-muted-foreground">
                           ({question.points} points)
                         </span>
-                        {markedForReview.has(question.id) && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 font-medium">
-                            Marked for Review
-                          </span>
-                        )}
-                      </div>
+                      )}
+                      {markedForReview.has(question.id) && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 font-medium">
+                          Marked for Review
+                        </span>
+                      )}
+                    </div>
+                    {!isTextBlock && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -809,8 +847,8 @@ export function TakeTestClient({
                           {markedForReview.has(question.id) ? 'Marked for review' : 'Mark for review'}
                         </span>
                       </Button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                   {isTextBlock ? (
                     <QuestionPrompt promptMd={question.promptMd} />
                   ) : question.type === 'SHORT_TEXT' && (() => {
@@ -942,7 +980,19 @@ export function TakeTestClient({
                     )
                   })()}
                   
-                  {question.type !== 'SHORT_TEXT' && !isTextBlock && <QuestionPrompt promptMd={question.promptMd} />}
+                  {question.type !== 'SHORT_TEXT' && question.type !== 'LONG_TEXT' && !isTextBlock && <QuestionPrompt promptMd={question.promptMd} />}
+                  {question.type === 'LONG_TEXT' && !isTextBlock && (() => {
+                    // For LONG_TEXT, we'll render the prompt inside the answer section if it has FRQ parts
+                    // Otherwise render it here
+                    const promptMd = question.promptMd || ''
+                    const frqPartsMatch = promptMd.match(/---FRQ_PARTS---\n\n([\s\S]+)$/)
+                    if (!frqPartsMatch) {
+                      // No FRQ parts, render normally
+                      return <QuestionPrompt promptMd={question.promptMd} />
+                    }
+                    // FRQ parts will be rendered in the answer section, so don't render here
+                    return null
+                  })()}
                   
                   {!isTextBlock && question.type === 'MCQ_SINGLE' && (
                     <RadioGroup 
@@ -1009,17 +1059,103 @@ export function TakeTestClient({
                     />
                   )}
 
-                  {!isTextBlock && question.type === 'LONG_TEXT' && (
-                    <Textarea
-                      className="min-h-[150px]"
-                      placeholder="Enter your answer"
-                      value={answers[question.id]?.answerText ?? ''}
-                      onChange={(e) => handleAnswerChange(question.id, {
-                        answerText: e.target.value,
-                      })}
-                      disabled={submitting}
-                    />
-                  )}
+                  {!isTextBlock && question.type === 'LONG_TEXT' && (() => {
+                    // Parse FRQ parts from promptMd if they exist
+                    const promptMd = question.promptMd || ''
+                    const frqPartsMatch = promptMd.match(/---FRQ_PARTS---\n\n([\s\S]+)$/)
+                    
+                    if (frqPartsMatch) {
+                      // Extract main content (everything before ---FRQ_PARTS---)
+                      const mainContent = promptMd.substring(0, frqPartsMatch.index).trim()
+                      const partsText = frqPartsMatch[1]
+                      
+                      // Parse context and prompt from main content (split on ---)
+                      const parts = mainContent.split('---').map(p => p.trim()).filter(p => p)
+                      const contextSection = parts.length > 1 ? parts[0] : ''
+                      const promptSection = parts.length > 1 ? parts[1] : mainContent
+                      
+                      // Parse individual parts using regex: [PART:label:points]\nprompt text
+                      const partRegex = /\[PART:([a-z]):(\d+(?:\.\d+)?)\]\n([\s\S]*?)(?=\n\n\[PART:|$)/g
+                      const frqParts: Array<{ label: string; points: number; prompt: string }> = []
+                      let match
+                      
+                      while ((match = partRegex.exec(partsText)) !== null) {
+                        frqParts.push({
+                          label: match[1],
+                          points: parseFloat(match[2]),
+                          prompt: match[3].trim(),
+                        })
+                      }
+                      
+                      if (frqParts.length > 0) {
+                        // Parse existing answers for FRQ parts (stored as delimited string: "part1 | part2 | part3")
+                        const existingAnswer = answers[question.id]?.answerText || ''
+                        const partAnswers = existingAnswer ? existingAnswer.split(' | ') : Array(frqParts.length).fill('')
+                        
+                        // Ensure we have enough answer slots
+                        while (partAnswers.length < frqParts.length) {
+                          partAnswers.push('')
+                        }
+                        
+                        return (
+                          <div className="space-y-4">
+                            {/* Render context if exists */}
+                            {contextSection && (
+                              <div className="pb-3 border-b border-border">
+                                <p className="text-xs text-muted-foreground mb-1">Context/Stimulus</p>
+                                <QuestionPrompt promptMd={contextSection} />
+                              </div>
+                            )}
+                            
+                            {/* Render main prompt if exists (and different from context) */}
+                            {promptSection && promptSection !== contextSection && (
+                              <div className="pb-3 border-b border-border">
+                                <QuestionPrompt promptMd={promptSection} />
+                              </div>
+                            )}
+                            
+                            {/* Render each FRQ part */}
+                            <div className="space-y-4">
+                              {frqParts.map((part, partIdx) => (
+                                <div key={partIdx} className="border-l-2 border-primary pl-4">
+                                  <p className="text-sm font-semibold mb-2">
+                                    Part {part.label}) ({part.points} points)
+                                  </p>
+                                  <p className="text-sm mb-2 whitespace-pre-wrap">{part.prompt}</p>
+                                  <Textarea
+                                    className="min-h-[100px]"
+                                    placeholder="Student will type their answer here..."
+                                    value={partAnswers[partIdx] || ''}
+                                    onChange={(e) => {
+                                      const newPartAnswers = [...partAnswers]
+                                      newPartAnswers[partIdx] = e.target.value
+                                      handleAnswerChange(question.id, {
+                                        answerText: newPartAnswers.join(' | '), // Store as delimited string
+                                      })
+                                    }}
+                                    disabled={submitting}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      }
+                    }
+                    
+                    // Fallback to single textarea for regular LONG_TEXT questions
+                    return (
+                      <Textarea
+                        className="min-h-[150px]"
+                        placeholder="Enter your answer"
+                        value={answers[question.id]?.answerText ?? ''}
+                        onChange={(e) => handleAnswerChange(question.id, {
+                          answerText: e.target.value,
+                        })}
+                        disabled={submitting}
+                      />
+                    )
+                  })()}
                 </div>
               )})
             )}

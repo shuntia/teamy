@@ -406,6 +406,8 @@ export function NewTestBuilder({
   })
 
   const [selectedEventId, setSelectedEventId] = useState<string>('')
+  const [isAtTop, setIsAtTop] = useState(true)
+  const [isAtBottom, setIsAtBottom] = useState(false)
 
   const [details, setDetails] = useState({
     name: test?.name || '',
@@ -1666,8 +1668,37 @@ export function NewTestBuilder({
     }
   }
 
+  // Scroll detection for navigation arrows
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop
+      const windowHeight = window.innerHeight
+      const documentHeight = document.documentElement.scrollHeight
+      const scrollBottom = documentHeight - (scrollTop + windowHeight)
+      
+      // Consider "at top" if within 100px of top
+      setIsAtTop(scrollTop < 100)
+      // Consider "at bottom" if within 100px of bottom
+      setIsAtBottom(scrollBottom < 100)
+    }
+
+    // Check initial position
+    handleScroll()
+    
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const scrollToBottom = () => {
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })
+  }
+
   return (
-    <div className="max-w-6xl mx-auto pb-24 space-y-8">
+    <div className="max-w-6xl mx-auto pb-24 space-y-8 relative">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
@@ -2470,6 +2501,49 @@ export function NewTestBuilder({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Navigation Arrows */}
+      <TooltipProvider delayDuration={300}>
+        {!isAtTop && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={scrollToTop}
+                variant="outline"
+                size="icon"
+                className={cn(
+                  "fixed right-8 z-50 h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-all",
+                  !isAtBottom ? "bottom-32" : "bottom-8"
+                )}
+              >
+                <ChevronUp className="h-5 w-5" />
+                <span className="sr-only">Jump to top</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p>Jump to top</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {!isAtBottom && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={scrollToBottom}
+                variant="outline"
+                size="icon"
+                className="fixed right-8 bottom-8 z-50 h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-all"
+              >
+                <ChevronDown className="h-5 w-5" />
+                <span className="sr-only">Jump to bottom</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p>Jump to bottom</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </TooltipProvider>
     </div>
   )
 }
@@ -2522,6 +2596,43 @@ function QuestionCard({
     rows: 3,
     cols: 3,
   })
+  const [pointsDisplayValue, setPointsDisplayValue] = useState<string>(question.points.toString())
+  const [partPointsDisplayValues, setPartPointsDisplayValues] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {}
+    if (question.frqParts) {
+      question.frqParts.forEach(part => {
+        initial[part.id] = part.points.toString()
+      })
+    }
+    return initial
+  })
+  
+  // Sync display values when question.points changes externally (but not if display is intentionally empty)
+  useEffect(() => {
+    // Only sync if display value is not empty, or if points is not 0
+    // This allows the field to stay empty when user clears it
+    if (pointsDisplayValue !== '' || question.points !== 0) {
+      setPointsDisplayValue(question.points.toString())
+    }
+  }, [question.points])
+  
+  // Sync part points display values when frqParts change externally (but not if display is intentionally empty)
+  useEffect(() => {
+    if (question.frqParts) {
+      setPartPointsDisplayValues(prev => {
+        const updated: Record<string, string> = { ...prev }
+        question.frqParts?.forEach(part => {
+          // Only sync if display value is not empty, or if points is not 0
+          // This allows the field to stay empty when user clears it
+          const currentDisplay = prev[part.id] ?? ''
+          if (currentDisplay !== '' || part.points !== 0) {
+            updated[part.id] = part.points.toString()
+          }
+        })
+        return updated
+      })
+    }
+  }, [question.frqParts])
 
   const handleOptionUpdate = (optionId: string, updater: (option: OptionDraft) => OptionDraft) => {
     onChange((prev) => ({
@@ -2625,26 +2736,44 @@ function QuestionCard({
       prompt: '',
       points: 1,
     }
-    onChange((prev) => ({
-      ...prev,
-      frqParts: [...(prev.frqParts || []), newPart],
-    }))
+    onChange((prev) => {
+      const updatedParts = [...(prev.frqParts || []), newPart]
+      // Calculate total points as sum of all part points
+      const totalPoints = updatedParts.reduce((sum, part) => sum + (part.points || 0), 0)
+      return {
+        ...prev,
+        frqParts: updatedParts,
+        points: totalPoints,
+      }
+    })
   }
 
   const updateFRQPart = (partId: string, updater: (part: FRQPart) => FRQPart) => {
-    onChange((prev) => ({
-      ...prev,
-      frqParts: (prev.frqParts || []).map((part) =>
+    onChange((prev) => {
+      const updatedParts = (prev.frqParts || []).map((part) =>
         part.id === partId ? updater(part) : part
-      ),
-    }))
+      )
+      // Calculate total points as sum of all part points
+      const totalPoints = updatedParts.reduce((sum, part) => sum + (part.points || 0), 0)
+      return {
+        ...prev,
+        frqParts: updatedParts,
+        points: totalPoints,
+      }
+    })
   }
 
   const removeFRQPart = (partId: string) => {
-    onChange((prev) => ({
-      ...prev,
-      frqParts: (prev.frqParts || []).filter((part) => part.id !== partId),
-    }))
+    onChange((prev) => {
+      const updatedParts = (prev.frqParts || []).filter((part) => part.id !== partId)
+      // Calculate total points as sum of remaining part points
+      const totalPoints = updatedParts.reduce((sum, part) => sum + (part.points || 0), 0)
+      return {
+        ...prev,
+        frqParts: updatedParts,
+        points: totalPoints,
+      }
+    })
   }
 
   // Get dynamic label for FRQ part based on index
@@ -3343,13 +3472,43 @@ function QuestionCard({
                           type="number"
                           min="0.5"
                           step="0.5"
-                          value={part.points}
-                          onChange={(e) =>
-                            updateFRQPart(part.id, (prev) => ({
+                          value={partPointsDisplayValues[part.id] ?? part.points.toString()}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setPartPointsDisplayValues(prev => ({
                               ...prev,
-                              points: Number(e.target.value) || 0.5,
+                              [part.id]: value,
                             }))
-                          }
+                            if (value !== '' && Number.isFinite(Number(value))) {
+                              updateFRQPart(part.id, (prev) => ({
+                                ...prev,
+                                points: Number(value),
+                              }))
+                            } else if (value === '') {
+                              // Clear the actual points value when empty
+                              updateFRQPart(part.id, (prev) => ({
+                                ...prev,
+                                points: 0,
+                              }))
+                            }
+                          }}
+                          onBlur={() => {
+                            const displayValue = partPointsDisplayValues[part.id] ?? ''
+                            // If display value is empty on blur, ensure it stays empty in display but keep 0 in state
+                            if (displayValue === '') {
+                              // Keep display empty
+                              setPartPointsDisplayValues(prev => ({
+                                ...prev,
+                                [part.id]: '',
+                              }))
+                            } else if (!Number.isFinite(Number(displayValue))) {
+                              // Reset to current points if invalid
+                              setPartPointsDisplayValues(prev => ({
+                                ...prev,
+                                [part.id]: part.points.toString(),
+                              }))
+                            }
+                          }}
                         />
                       </div>
                     </div>
@@ -3519,19 +3678,44 @@ function QuestionCard({
               type="number"
               min={question.type === 'TEXT_BLOCK' ? "0" : "0.5"}
               step="0.5"
-              value={question.points}
-              onChange={(event) =>
-                onChange((prev) => ({
-                  ...prev,
-                  points: Number.isFinite(Number(event.target.value))
-                    ? Number(event.target.value)
-                    : prev.points,
-                }))
-              }
+              value={pointsDisplayValue}
+              onChange={(event) => {
+                const value = event.target.value
+                setPointsDisplayValue(value)
+                if (value !== '' && Number.isFinite(Number(value))) {
+                  onChange((prev) => ({
+                    ...prev,
+                    points: Number(value),
+                  }))
+                } else if (value === '') {
+                  // Clear the actual points value when empty
+                  onChange((prev) => ({
+                    ...prev,
+                    points: 0,
+                  }))
+                }
+              }}
+              onBlur={() => {
+                // If display value is empty on blur, ensure it stays empty in display but keep 0 in state
+                if (pointsDisplayValue === '') {
+                  // Keep display empty
+                  setPointsDisplayValue('')
+                } else if (!Number.isFinite(Number(pointsDisplayValue))) {
+                  // Reset to current points if invalid
+                  setPointsDisplayValue(question.points.toString())
+                }
+              }}
+              disabled={question.type === 'LONG_TEXT' && question.frqParts && question.frqParts.length > 0}
+              className={question.type === 'LONG_TEXT' && question.frqParts && question.frqParts.length > 0 ? 'bg-muted/50' : ''}
             />
             {question.type === 'TEXT_BLOCK' && (
               <p className="text-xs text-muted-foreground mt-1">
                 Text blocks are display-only and typically have 0 points.
+              </p>
+            )}
+            {question.type === 'LONG_TEXT' && question.frqParts && question.frqParts.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Total points automatically calculated from part points.
               </p>
             )}
           </div>

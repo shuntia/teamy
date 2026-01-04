@@ -64,6 +64,7 @@ export async function GET(
         updatedAt: suggestion.updatedAt.toISOString(),
         acceptedAt: suggestion.acceptedAt?.toISOString() || null,
         acceptedPoints: suggestion.acceptedPoints ? Number(suggestion.acceptedPoints) : null,
+        rawResponse: suggestion.rawResponse, // Include rawResponse for part suggestions
       })),
     })
   } catch (error) {

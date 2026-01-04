@@ -69,6 +69,7 @@ interface GradeEdit {
   answerId: string
   pointsAwarded: number
   graderNote: string
+  partPoints?: (number | null)[] // For multipart FRQs
 }
 
 interface Section {
@@ -90,7 +91,7 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
   const [saving, setSaving] = useState(false)
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, any>>({})
   const [loadingAiSuggestions, setLoadingAiSuggestions] = useState(false)
-  const [requestingAiGrading, setRequestingAiGrading] = useState(false)
+  const [requestingAiGrading, setRequestingAiGrading] = useState<string | null>(null) // Track which part is loading: `${answerId}-${partIndex}` or `answerId` for whole question
 
   useEffect(() => {
     fetchAttempts()
@@ -125,10 +126,60 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
     // Initialize grade edits from current attempt
     const edits: Record<string, GradeEdit> = {}
     attempt.answers.forEach((answer) => {
+      // Try to parse part points from graderNote if it exists
+      let partPoints: (number | null)[] | undefined = undefined
+      let graderNoteText = answer.graderNote || ''
+      
+      if (answer.graderNote) {
+        try {
+          // Check if graderNote contains JSON with partPoints
+          const parsed = JSON.parse(answer.graderNote)
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.partPoints)) {
+            partPoints = parsed.partPoints
+            graderNoteText = parsed.feedback || ''
+          }
+        } catch {
+          // If parsing fails, treat as plain text feedback
+          graderNoteText = answer.graderNote
+        }
+      }
+      
+      // If no partPoints were loaded but this is a multipart FRQ, initialize them
+      if (!partPoints && (answer.question.type === 'LONG_TEXT' || answer.question.type === 'SHORT_TEXT')) {
+        const promptMd = answer.question.promptMd || ''
+        const frqPartsMatch = promptMd.match(/---FRQ_PARTS---\n\n([\s\S]+)$/)
+        if (frqPartsMatch) {
+          const partsText = frqPartsMatch[1]
+          const partRegex = /\[PART:([a-z]):(\d+(?:\.\d+)?)\]\n([\s\S]*?)(?=\n\n\[PART:|$)/g
+          const frqParts: Array<{ label: string; points: number; prompt: string }> = []
+          let match
+          
+          while ((match = partRegex.exec(partsText)) !== null) {
+            frqParts.push({
+              label: match[1],
+              points: parseFloat(match[2]),
+              prompt: match[3].trim(),
+            })
+          }
+          
+          if (frqParts.length > 0) {
+            // Initialize partPoints array with nulls, or distribute pointsAwarded if it exists
+            if (answer.pointsAwarded !== null && answer.pointsAwarded > 0) {
+              // If there's an existing total, try to distribute it proportionally
+              // Otherwise, just initialize with nulls
+              partPoints = Array(frqParts.length).fill(null)
+            } else {
+              partPoints = Array(frqParts.length).fill(null)
+            }
+          }
+        }
+      }
+      
       edits[answer.id] = {
         answerId: answer.id,
         pointsAwarded: answer.pointsAwarded !== null ? answer.pointsAwarded : 0,
-        graderNote: answer.graderNote || '',
+        graderNote: graderNoteText,
+        partPoints,
       }
     })
     setGradeEdits(edits)
@@ -145,6 +196,10 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
         // Create a map of answerId -> suggestion
         const suggestionsMap: Record<string, any> = {}
         data.suggestions?.forEach((suggestion: any) => {
+          // Parse part suggestions from rawResponse if present
+          if (suggestion.rawResponse?.isMultipart && suggestion.rawResponse?.partSuggestions) {
+            suggestion.partSuggestions = suggestion.rawResponse.partSuggestions
+          }
           suggestionsMap[suggestion.answerId] = suggestion
         })
         setAiSuggestions(suggestionsMap)
@@ -157,15 +212,18 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
     }
   }
 
-  const handleRequestAiGrading = async (mode: 'single' | 'all', answerId?: string) => {
+  const handleRequestAiGrading = async (mode: 'single' | 'all', answerId?: string, partIndex?: number) => {
     if (!selectedAttempt) return
 
-    setRequestingAiGrading(true)
+    // Set loading key for the specific part or question
+    const loadingKey = partIndex !== undefined && answerId ? `${answerId}-${partIndex}` : (answerId || 'all')
+    setRequestingAiGrading(loadingKey)
+    
     try {
       const response = await fetch(`/api/tests/${testId}/attempts/${selectedAttempt.id}/ai/grade`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, answerId }),
+        body: JSON.stringify({ mode, answerId, partIndex }),
       })
 
       if (!response.ok) {
@@ -178,6 +236,10 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
       // Update suggestions map with new suggestions
       const updatedSuggestions = { ...aiSuggestions }
       data.suggestions?.forEach((suggestion: any) => {
+        // Parse part suggestions from rawResponse if present
+        if (suggestion.rawResponse?.isMultipart && suggestion.rawResponse?.partSuggestions) {
+          suggestion.partSuggestions = suggestion.rawResponse.partSuggestions
+        }
         updatedSuggestions[suggestion.answerId] = suggestion
       })
       setAiSuggestions(updatedSuggestions)
@@ -194,7 +256,7 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
         variant: 'destructive',
       })
     } finally {
-      setRequestingAiGrading(false)
+      setRequestingAiGrading(null)
     }
   }
 
@@ -218,8 +280,46 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
       [answerId]: {
         ...prev[answerId],
         [field]: value,
+        // Reset partPoints if manually editing total points (not from parts)
+        ...(field === 'pointsAwarded' && !prev[answerId]?.partPoints ? {} : {}),
       },
     }))
+  }
+
+  const handlePartGradeEdit = (answerId: string, partIndex: number, value: number | string, maxPoints: number) => {
+    setGradeEdits((prev) => {
+      const current = prev[answerId] || { answerId, pointsAwarded: 0, graderNote: '' }
+      const partPoints = current.partPoints || []
+      const newPartPoints = [...partPoints]
+      
+      // Ensure array is long enough
+      while (newPartPoints.length <= partIndex) {
+        newPartPoints.push(null)
+      }
+      
+      // Clamp value to max points
+      let clampedValue: number | null = null
+      if (value !== '' && value !== null) {
+        const numValue = Number(value)
+        clampedValue = Math.min(Math.max(0, numValue), maxPoints)
+      }
+      
+      newPartPoints[partIndex] = clampedValue
+      
+      // Calculate total from part points
+      const totalPoints = newPartPoints.reduce((sum: number, pts) => {
+        return sum + (pts || 0)
+      }, 0)
+      
+      return {
+        ...prev,
+        [answerId]: {
+          ...current,
+          partPoints: newPartPoints,
+          pointsAwarded: totalPoints,
+        },
+      }
+    })
   }
 
   const handleSaveGrades = async () => {
@@ -228,10 +328,32 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
     setSaving(true)
     try {
       // Send all grades that have been edited
-      const gradesToSave = Object.values(gradeEdits).filter((grade) => {
-        const answer = selectedAttempt.answers.find((a) => a.id === grade.answerId)
-        return answer !== undefined
-      })
+      const gradesToSave = Object.values(gradeEdits)
+        .filter((grade) => {
+          const answer = selectedAttempt.answers.find((a) => a.id === grade.answerId)
+          return answer !== undefined
+        })
+        .map((grade) => {
+          // For multipart FRQs, store part points in graderNote as JSON
+          let graderNote = grade.graderNote || ''
+          
+          if (grade.partPoints && grade.partPoints.length > 0) {
+            // Store part points and feedback together in JSON format
+            const noteData: { partPoints: (number | null)[], feedback?: string } = {
+              partPoints: grade.partPoints,
+            }
+            if (graderNote.trim()) {
+              noteData.feedback = graderNote
+            }
+            graderNote = JSON.stringify(noteData)
+          }
+          
+          return {
+            answerId: grade.answerId,
+            pointsAwarded: grade.pointsAwarded,
+            graderNote,
+          }
+        })
 
       const response = await fetch(`/api/tests/${testId}/attempts/${selectedAttempt.id}/grade`, {
         method: 'PATCH',
@@ -640,17 +762,17 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                     {selectedAttempt.answers.some(a => a.question.type === 'SHORT_TEXT' || a.question.type === 'LONG_TEXT') && (
                       <Button 
                         onClick={() => handleRequestAiGrading('all')} 
-                        disabled={requestingAiGrading}
+                        disabled={requestingAiGrading !== null}
                         variant="outline"
                         size="sm"
                         className="gap-2"
                       >
-                        {requestingAiGrading ? (
+                        {requestingAiGrading === 'all' ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <Sparkles className="h-4 w-4" />
                         )}
-                        {requestingAiGrading ? 'Generating...' : 'AI Grade All'}
+                        {requestingAiGrading === 'all' ? 'Generating...' : 'AI Grade All'}
                       </Button>
                     )}
                     <Button 
@@ -673,12 +795,115 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                               Question {index + 1}
                             </CardTitle>
                             <div className="text-sm text-muted-foreground mt-1">
-                              <QuestionPrompt promptMd={answer.question.promptMd} />
+                              {(() => {
+                                // Parse prompt to hide FRQ_PARTS section in header
+                                const promptMd = answer.question.promptMd || ''
+                                const frqPartsMatch = promptMd.match(/---FRQ_PARTS---\n\n([\s\S]+)$/)
+                                let mainContent = frqPartsMatch ? promptMd.substring(0, frqPartsMatch.index).trim() : promptMd
+                                
+                                // Check if this is a fill-in-the-blank question
+                                const hasBlanks = /\[blank\d*\]/.test(mainContent)
+                                
+                                // Split context and prompt if separated by ---
+                                const parts = mainContent.split('---').map(p => p.trim()).filter(p => p)
+                                const contextSection = parts.length > 1 ? parts[0] : ''
+                                const promptSection = parts.length > 1 ? parts[1] : mainContent
+                                
+                                return (
+                                  <div className="space-y-2">
+                                    {contextSection && (
+                                      <div>
+                                        <p className="text-xs text-muted-foreground mb-1">Context/Stimulus</p>
+                                        <QuestionPrompt promptMd={contextSection} />
+                                      </div>
+                                    )}
+                                    {promptSection && (
+                                      <div>
+                                        {contextSection && <p className="text-xs text-muted-foreground mb-1 mt-2">Question</p>}
+                                        {hasBlanks ? (() => {
+                                          // Parse fill-in-the-blank question to show inline blanks
+                                          const imageRegex = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g
+                                          const tableRegex = /(\|.+\|[\r\n]+\|[-:\s|]+\|[\r\n]+(?:\|.+\|(?:\r?\n(?!\r?\n))?)+)/g
+                                          
+                                          // Remove images and tables from text for blank processing
+                                          let textOnly = promptSection.replace(imageRegex, '').replace(tableRegex, '')
+                                          
+                                          // Split on blank markers
+                                          const normalizedText = textOnly.replace(/\[blank\d*\]/g, '[BLANK_MARKER]')
+                                          const textSegments: string[] = normalizedText.split('[BLANK_MARKER]')
+                                          
+                                          return (
+                                            <div className="space-y-2">
+                                              <div className="text-base leading-relaxed">
+                                                {textSegments.map((segment, index) => (
+                                                  <span key={index} className="inline">
+                                                    {segment && (
+                                                      <span className="whitespace-pre-wrap">{segment}</span>
+                                                    )}
+                                                    {index < textSegments.length - 1 && (
+                                                      <Input
+                                                        type="text"
+                                                        value=""
+                                                        disabled
+                                                        className="inline-block w-auto min-w-[150px] max-w-[300px] mx-2 align-middle"
+                                                      />
+                                                    )}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                              {/* Render images and tables if they exist */}
+                                              {(() => {
+                                                const imageMatches: string[] = []
+                                                let match
+                                                while ((match = imageRegex.exec(promptSection)) !== null) {
+                                                  imageMatches.push(match[0])
+                                                }
+                                                const tableMatches: string[] = []
+                                                while ((match = tableRegex.exec(promptSection)) !== null) {
+                                                  tableMatches.push(match[0])
+                                                }
+                                                
+                                                if (imageMatches.length > 0 || tableMatches.length > 0) {
+                                                  return (
+                                                    <div className="space-y-2">
+                                                      {imageMatches.map((img, idx) => (
+                                                        <div key={`img-${idx}`} className="my-3 rounded-md border border-input overflow-hidden bg-muted/30">
+                                                          <img
+                                                            src={img.match(/\(([^)]+)\)/)?.[1] || ''}
+                                                            alt={img.match(/\[([^\]]*)\]/)?.[1] || 'Image'}
+                                                            className="max-w-full max-h-96 object-contain block mx-auto"
+                                                          />
+                                                        </div>
+                                                      ))}
+                                                      {tableMatches.map((table, idx) => (
+                                                        <div key={`table-${idx}`} className="my-3 rounded-md border border-input overflow-hidden bg-muted/30 p-3">
+                                                          <QuestionPrompt promptMd={table} />
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  )
+                                                }
+                                                return null
+                                              })()}
+                                            </div>
+                                          )
+                                        })() : (
+                                          <QuestionPrompt promptMd={promptSection} />
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </div>
                             {answer.question.type.startsWith('MCQ') && answer.question.options && (
                               <div className="mt-3">
                                 {answer.question.type === 'MCQ_SINGLE' ? (
-                                  <RadioGroup value="" disabled className="space-y-2">
+                                  <RadioGroup 
+                                    value={answer.question.options.find((opt: any) => opt.isCorrect)?.id || ""} 
+                                    disabled 
+                                    className="space-y-2"
+                                  >
                                     {answer.question.options.map((option) => (
                                       <div
                                         key={option.id}
@@ -709,7 +934,7 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                                             : 'border-border'
                                         }`}
                                       >
-                                        <Checkbox id={`preview-${option.id}`} disabled />
+                                        <Checkbox id={`preview-${option.id}`} checked={option.isCorrect} disabled />
                                         <Label htmlFor={`preview-${option.id}`} className="font-normal flex-1 cursor-default">
                                           {option.label}
                                         </Label>
@@ -789,17 +1014,194 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                             {/* Student's Answer - Only for FRQ questions */}
                             {(answer.question.type === 'SHORT_TEXT' || answer.question.type === 'LONG_TEXT') && (
                               <>
-                                <div>
-                                  <p className="text-xs font-semibold uppercase text-muted-foreground mb-2">
-                                    Student&apos;s Answer
-                                  </p>
-                                  <div className="whitespace-pre-wrap p-3 bg-muted/30 rounded border">
-                                    {answer.answerText && answer.answerText.trim() ? (
-                                      answer.answerText
-                                    ) : (
-                                      <span className="text-muted-foreground italic">No answer provided</span>
-                                    )}
+                                <div className="space-y-4">
+                                  <div className="flex items-center gap-2 pb-2 border-b border-border/50">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                      Student&apos;s Answer
+                                    </p>
                                   </div>
+                                  {(() => {
+                                    // Check if this is a multipart FRQ
+                                    const promptMd = answer.question.promptMd || ''
+                                    const frqPartsMatch = promptMd.match(/---FRQ_PARTS---\n\n([\s\S]+)$/)
+                                    
+                                    if (frqPartsMatch && answer.answerText) {
+                                      // Parse FRQ parts
+                                      const partsText = frqPartsMatch[1]
+                                      const partRegex = /\[PART:([a-z]):(\d+(?:\.\d+)?)\]\n([\s\S]*?)(?=\n\n\[PART:|$)/g
+                                      const frqParts: Array<{ label: string; points: number; prompt: string }> = []
+                                      let match
+                                      
+                                      while ((match = partRegex.exec(partsText)) !== null) {
+                                        frqParts.push({
+                                          label: match[1],
+                                          points: parseFloat(match[2]),
+                                          prompt: match[3].trim(),
+                                        })
+                                      }
+                                      
+                                      if (frqParts.length > 0) {
+                                        // Parse answer text (stored as "part1 | part2 | part3")
+                                        const partAnswers = answer.answerText.split(' | ')
+                                        const currentPartPoints = gradeEdits[answer.id]?.partPoints || []
+                                        
+                                        return (
+                                          <div className="space-y-5">
+                                            {frqParts.map((part, partIdx) => {
+                                              const partPoints = currentPartPoints[partIdx] ?? null
+                                              const displayValue = partPoints === null || partPoints === 0 ? '' : partPoints
+                                              
+                                              // Check for part-level AI suggestion
+                                              const suggestion = aiSuggestions[answer.id]
+                                              let partSuggestion = null
+                                              
+                                              if (suggestion) {
+                                                // Check partSuggestions array first
+                                                if (suggestion.partSuggestions && Array.isArray(suggestion.partSuggestions)) {
+                                                  partSuggestion = suggestion.partSuggestions.find((p: any) => p.partIndex === partIdx && p.summary)
+                                                }
+                                                // Fall back to rawResponse
+                                                if (!partSuggestion && suggestion.rawResponse?.isMultipart && suggestion.rawResponse?.partSuggestions) {
+                                                  const rawParts = suggestion.rawResponse.partSuggestions
+                                                  if (Array.isArray(rawParts)) {
+                                                    partSuggestion = rawParts.find((p: any) => p.partIndex === partIdx && p.summary)
+                                                  }
+                                                }
+                                              }
+                                              
+                                              return (
+                                                <div key={partIdx} className="relative">
+                                                  <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60 rounded-full" />
+                                                  <div className="pl-6 space-y-3">
+                                                    <div className="flex items-start justify-between gap-4">
+                                                      <div className="flex-1 space-y-2">
+                                                        <div className="flex items-center gap-2.5">
+                                                          <p className="text-base font-semibold text-foreground">
+                                                            Part {part.label})
+                                                          </p>
+                                                          <Badge variant="outline" className="text-xs font-medium px-2 py-0.5">
+                                                            {part.points} {part.points === 1 ? 'point' : 'points'}
+                                                          </Badge>
+                                                        </div>
+                                                        <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{part.prompt}</p>
+                                                      </div>
+                                                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                                        <div className="flex items-center gap-2">
+                                                          {!partSuggestion && (
+                                                            <Button
+                                                              size="sm"
+                                                              variant="ghost"
+                                                              onClick={() => handleRequestAiGrading('single', answer.id, partIdx)}
+                                                              disabled={requestingAiGrading !== null}
+                                                              className="h-6 px-2 gap-1 text-xs"
+                                                              title="AI Grade this part"
+                                                            >
+                                                              {requestingAiGrading === `${answer.id}-${partIdx}` ? (
+                                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                              ) : (
+                                                                <Sparkles className="h-3 w-3" />
+                                                              )}
+                                                            </Button>
+                                                          )}
+                                                          <Label htmlFor={`part-points-${answer.id}-${partIdx}`} className="text-xs font-medium text-muted-foreground">
+                                                            Points
+                                                          </Label>
+                                                        </div>
+                                                        <Input
+                                                          id={`part-points-${answer.id}-${partIdx}`}
+                                                          type="number"
+                                                          min="0"
+                                                          max={part.points}
+                                                          step="0.5"
+                                                          value={displayValue}
+                                                          onChange={(e) => {
+                                                            const inputValue = e.target.value
+                                                            if (inputValue === '') {
+                                                              handlePartGradeEdit(answer.id, partIdx, '', part.points)
+                                                            } else {
+                                                              const numValue = parseFloat(inputValue)
+                                                              if (!isNaN(numValue)) {
+                                                                // Clamp to max points
+                                                                const clampedValue = Math.min(Math.max(0, numValue), part.points)
+                                                                handlePartGradeEdit(answer.id, partIdx, clampedValue, part.points)
+                                                              }
+                                                            }
+                                                          }}
+                                                          onBlur={(e) => {
+                                                            const inputValue = e.target.value
+                                                            if (inputValue !== '') {
+                                                              const numValue = parseFloat(inputValue)
+                                                              if (!isNaN(numValue)) {
+                                                                // Ensure value is clamped on blur
+                                                                const clampedValue = Math.min(Math.max(0, numValue), part.points)
+                                                                if (clampedValue !== numValue) {
+                                                                  e.target.value = clampedValue.toString()
+                                                                  handlePartGradeEdit(answer.id, partIdx, clampedValue, part.points)
+                                                                }
+                                                              }
+                                                            }
+                                                          }}
+                                                          placeholder="0"
+                                                          className="w-28 h-10 text-sm font-semibold text-center"
+                                                        />
+                                                        <p className="text-[10px] text-muted-foreground">max: {part.points}</p>
+                                                        {partSuggestion && (
+                                                          <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                              // Apply part suggestion
+                                                              handlePartGradeEdit(answer.id, partIdx, partSuggestion.suggestedScore, part.points)
+                                                            }}
+                                                            className="h-6 px-2 gap-1 text-xs text-xs border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50"
+                                                          >
+                                                            Apply AI: {partSuggestion.suggestedScore}/{part.points}
+                                                          </Button>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                    {partSuggestion && (
+                                                      <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800 space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                          <Sparkles className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                                                          <span className="text-xs font-semibold text-purple-900 dark:text-purple-100">
+                                                            AI Suggestion for Part {part.label}: {partSuggestion.suggestedScore}/{part.points} pts
+                                                          </span>
+                                                        </div>
+                                                        {partSuggestion.summary && (
+                                                          <p className="text-xs text-purple-800 dark:text-purple-200">
+                                                            {partSuggestion.summary}
+                                                          </p>
+                                                        )}
+                                                      </div>
+                                                    )}
+                                                    <div className="whitespace-pre-wrap p-4 bg-muted/40 dark:bg-muted/20 rounded-lg border border-border min-h-[100px] shadow-sm">
+                                                      {partAnswers[partIdx] && partAnswers[partIdx].trim() ? (
+                                                        <p className="text-sm leading-relaxed">{partAnswers[partIdx]}</p>
+                                                      ) : (
+                                                        <span className="text-muted-foreground italic">No answer provided</span>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              )
+                                            })}
+                                          </div>
+                                        )
+                                      }
+                                    }
+                                    
+                                    // Fallback to single answer display
+                                    return (
+                                      <div className="whitespace-pre-wrap p-4 bg-muted/40 dark:bg-muted/20 rounded-lg border border-border min-h-[100px] shadow-sm">
+                                        {answer.answerText && answer.answerText.trim() ? (
+                                          <p className="text-sm leading-relaxed">{answer.answerText}</p>
+                                        ) : (
+                                          <span className="text-muted-foreground italic">No answer provided</span>
+                                        )}
+                                      </div>
+                                    )
+                                  })()}
                                 </div>
 
                                 {/* Example Solution */}
@@ -818,10 +1220,12 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
 
                             {/* AI Suggestion */}
                             {aiSuggestions[answer.id] && (
-                              <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded border border-purple-200 dark:border-purple-800 space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                              <div className="p-5 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800 shadow-sm space-y-4">
+                                <div className="flex items-center justify-between pb-3 border-b border-purple-200 dark:border-purple-700">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="p-1.5 rounded-md bg-purple-100 dark:bg-purple-900/50">
+                                      <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                                    </div>
                                     <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">
                                       AI Suggestion
                                     </p>
@@ -830,119 +1234,176 @@ export function TestAttemptsView({ testId, testName }: TestAttemptsViewProps) {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleApplyAiSuggestion(answer.id)}
-                                    className="gap-2"
+                                    className="gap-2 border-purple-300 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/50"
                                   >
                                     Apply
                                   </Button>
                                 </div>
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium">Suggested Score:</span>
-                                    <Badge variant="default" className="bg-purple-600">
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-sm font-medium text-purple-900 dark:text-purple-100">Suggested Score:</span>
+                                    <Badge variant="default" className="bg-purple-600 text-white font-semibold">
                                       {aiSuggestions[answer.id].suggestedPoints} / {aiSuggestions[answer.id].maxPoints} pts
                                     </Badge>
                                   </div>
                                   {aiSuggestions[answer.id].explanation && (
-                                    <div>
-                                      <p className="text-xs font-semibold text-purple-900 dark:text-purple-100 mb-1">
-                                        Rationale:
+                                    <div className="p-3 bg-white/50 dark:bg-purple-950/30 rounded-md border border-purple-100 dark:border-purple-800/50">
+                                      <p className="text-xs font-semibold text-purple-900 dark:text-purple-100 mb-1.5 uppercase tracking-wide">
+                                        Rationale
                                       </p>
-                                      <p className="text-sm text-purple-800 dark:text-purple-200">
+                                      <p className="text-sm text-purple-800 dark:text-purple-200 leading-relaxed">
                                         {aiSuggestions[answer.id].explanation}
                                       </p>
                                     </div>
                                   )}
                                   {aiSuggestions[answer.id].strengths && (
-                                    <div>
-                                      <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">
-                                        Strengths:
+                                    <div className="p-3 bg-green-50/50 dark:bg-green-950/20 rounded-md border border-green-200 dark:border-green-800/50">
+                                      <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1.5 uppercase tracking-wide">
+                                        Strengths
                                       </p>
-                                      <p className="text-sm text-purple-800 dark:text-purple-200">
+                                      <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed">
                                         {aiSuggestions[answer.id].strengths}
                                       </p>
                                     </div>
                                   )}
                                   {aiSuggestions[answer.id].gaps && (
-                                    <div>
-                                      <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-1">
-                                        Gaps:
+                                    <div className="p-3 bg-orange-50/50 dark:bg-orange-950/20 rounded-md border border-orange-200 dark:border-orange-800/50">
+                                      <p className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-1.5 uppercase tracking-wide">
+                                        Gaps
                                       </p>
-                                      <p className="text-sm text-purple-800 dark:text-purple-200">
+                                      <p className="text-sm text-orange-800 dark:text-orange-200 leading-relaxed">
                                         {aiSuggestions[answer.id].gaps}
                                       </p>
                                     </div>
                                   )}
                                   {aiSuggestions[answer.id].rubricAlignment && (
-                                    <div>
-                                      <p className="text-xs font-semibold text-purple-900 dark:text-purple-100 mb-1">
-                                        Rubric Alignment:
+                                    <div className="p-3 bg-white/50 dark:bg-purple-950/30 rounded-md border border-purple-100 dark:border-purple-800/50">
+                                      <p className="text-xs font-semibold text-purple-900 dark:text-purple-100 mb-1.5 uppercase tracking-wide">
+                                        Rubric Alignment
                                       </p>
-                                      <p className="text-sm text-purple-800 dark:text-purple-200">
+                                      <p className="text-sm text-purple-800 dark:text-purple-200 leading-relaxed">
                                         {aiSuggestions[answer.id].rubricAlignment}
                                       </p>
                                     </div>
                                   )}
-                                  <p className="text-xs text-muted-foreground mt-2">
-                                    Generated: {new Date(aiSuggestions[answer.id].createdAt).toLocaleString()}
-                                  </p>
+                                  <div className="pt-2 border-t border-purple-200 dark:border-purple-700">
+                                    <p className="text-xs text-muted-foreground">
+                                      <Clock className="h-3 w-3 inline mr-1" />
+                                      Generated: {new Date(aiSuggestions[answer.id].createdAt).toLocaleString()}
+                                    </p>
+                                  </div>
                                 </div>
                               </div>
                             )}
 
                             {/* Grading Interface */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 dark:border-blue-800">
-                              <div>
-                                <div className="flex items-center justify-between mb-1">
-                                  <Label htmlFor={`points-${answer.id}`} className="text-sm font-semibold">
-                                    Points Awarded (max: {answer.question.points})
-                                  </Label>
-                                  {!aiSuggestions[answer.id] && (answer.question.type === 'SHORT_TEXT' || answer.question.type === 'LONG_TEXT') && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => handleRequestAiGrading('single', answer.id)}
-                                      disabled={requestingAiGrading}
-                                      className="h-6 px-2 gap-1 text-xs"
-                                    >
-                                      {requestingAiGrading ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <Sparkles className="h-3 w-3" />
-                                      )}
-                                      AI Grade
-                                    </Button>
+                            {(() => {
+                              // Check if this is a multipart FRQ
+                              const promptMd = answer.question.promptMd || ''
+                              const frqPartsMatch = promptMd.match(/---FRQ_PARTS---\n\n([\s\S]+)$/)
+                              let frqParts: Array<{ label: string; points: number; prompt: string }> = []
+                              
+                              if (frqPartsMatch) {
+                                const partsText = frqPartsMatch[1]
+                                const partRegex = /\[PART:([a-z]):(\d+(?:\.\d+)?)\]\n([\s\S]*?)(?=\n\n\[PART:|$)/g
+                                let match
+                                
+                                while ((match = partRegex.exec(partsText)) !== null) {
+                                  frqParts.push({
+                                    label: match[1],
+                                    points: parseFloat(match[2]),
+                                    prompt: match[3].trim(),
+                                  })
+                                }
+                              }
+                              
+                              const isMultipart = frqParts.length > 0
+                              const currentTotal = gradeEdits[answer.id]?.pointsAwarded ?? (answer.pointsAwarded ?? 0)
+                              
+                              return (
+                                <div className="space-y-4 p-5 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800 shadow-sm">
+                                  {isMultipart ? (
+                                    <>
+                                      {/* Multipart - Show total (no overall AI Grade button, grade by part instead) */}
+                                      <div className="flex items-center justify-between pb-3 border-b border-blue-200 dark:border-blue-700">
+                                        <div className="flex items-baseline gap-3">
+                                          <div>
+                                            <Label className="text-sm font-semibold text-foreground">
+                                              Total Points
+                                            </Label>
+                                            <div className="flex items-baseline gap-2 mt-1">
+                                              <span className="text-2xl font-bold">{currentTotal}</span>
+                                              <span className="text-sm text-muted-foreground">/ {answer.question.points}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      {/* Single Part Grading */}
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                          <div className="flex items-center justify-between mb-1">
+                                            <Label htmlFor={`points-${answer.id}`} className="text-sm font-semibold">
+                                              Points Awarded (max: {answer.question.points})
+                                            </Label>
+                                            {!aiSuggestions[answer.id] && (answer.question.type === 'SHORT_TEXT' || answer.question.type === 'LONG_TEXT') && (
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => handleRequestAiGrading('single', answer.id)}
+                                                disabled={requestingAiGrading !== null}
+                                                className="h-6 px-2 gap-1 text-xs"
+                                              >
+                                                {requestingAiGrading === answer.id ? (
+                                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                  <Sparkles className="h-3 w-3" />
+                                                )}
+                                                AI Grade
+                                              </Button>
+                                            )}
+                                          </div>
+                                          <Input
+                                            id={`points-${answer.id}`}
+                                            type="number"
+                                            min="0"
+                                            max={answer.question.points}
+                                            step="0.5"
+                                            value={currentTotal === 0 ? '' : currentTotal}
+                                            onChange={(e) => handleGradeEdit(answer.id, 'pointsAwarded', e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                                            placeholder="0"
+                                            className="mt-1"
+                                          />
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                  
+                                  {/* Feedback Section (common for both) */}
+                                  <div className="pt-2">
+                                    <Label htmlFor={`feedback-${answer.id}`} className="text-sm font-semibold mb-2 block">
+                                      Feedback (optional)
+                                    </Label>
+                                    <Textarea
+                                      id={`feedback-${answer.id}`}
+                                      placeholder="Provide feedback to the student..."
+                                      value={gradeEdits[answer.id]?.graderNote ?? ''}
+                                      onChange={(e) => handleGradeEdit(answer.id, 'graderNote', e.target.value)}
+                                      className="min-h-[100px] resize-y"
+                                    />
+                                  </div>
+                                  
+                                  {answer.gradedAt && (
+                                    <div className="text-xs text-muted-foreground pt-2 border-t border-blue-200 dark:border-blue-700">
+                                      <Clock className="h-3 w-3 inline mr-1" />
+                                      Last graded: {new Date(answer.gradedAt).toLocaleString()}
+                                    </div>
                                   )}
                                 </div>
-                                <Input
-                                  id={`points-${answer.id}`}
-                                  type="number"
-                                  min="0"
-                                  max={answer.question.points}
-                                  step="0.5"
-                                  value={gradeEdits[answer.id]?.pointsAwarded === 0 ? '' : gradeEdits[answer.id]?.pointsAwarded ?? ''}
-                                  onChange={(e) => handleGradeEdit(answer.id, 'pointsAwarded', e.target.value === '' ? 0 : parseFloat(e.target.value))}
-                                  className="mt-1"
-                                  placeholder="0"
-                                />
-                              </div>
-                              <div className="md:col-span-2">
-                                <Label htmlFor={`feedback-${answer.id}`} className="text-sm font-semibold">
-                                  Feedback (optional)
-                                </Label>
-                                <Textarea
-                                  id={`feedback-${answer.id}`}
-                                  value={gradeEdits[answer.id]?.graderNote ?? ''}
-                                  onChange={(e) => handleGradeEdit(answer.id, 'graderNote', e.target.value)}
-                                  placeholder="Provide feedback to the student..."
-                                  className="mt-1 min-h-[80px]"
-                                />
-                              </div>
-                              {answer.gradedAt && (
-                                <div className="md:col-span-2 text-xs text-muted-foreground">
-                                  Last graded: {new Date(answer.gradedAt).toLocaleString()}
-                                </div>
-                              )}
-                            </div>
+                              )
+                            })()}
                           </div>
 
                       </CardContent>
