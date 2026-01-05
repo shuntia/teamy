@@ -63,16 +63,28 @@ interface UserAttemptInfo {
   hasReachedLimit: boolean
 }
 
-// Helper function to highlight search terms in text (exact copy from dev panel)
+// Memoized regex cache for highlightText
+const regexCache = new Map<string, RegExp>()
+
+// Helper function to highlight search terms in text (optimized with regex caching)
 const highlightText = (text: string | null | undefined, searchQuery: string): string | (string | JSX.Element)[] => {
   if (!text || !searchQuery) return text || ''
   
   const query = searchQuery.trim()
   if (!query) return text
   
-  // Escape special regex characters
-  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`(${escapedQuery})`, 'gi')
+  // Use cached regex if available
+  let regex = regexCache.get(query)
+  if (!regex) {
+    // Escape special regex characters
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    regex = new RegExp(`(${escapedQuery})`, 'gi')
+    // Cache regex (limit cache size to prevent memory leaks)
+    if (regexCache.size < 50) {
+      regexCache.set(query, regex)
+    }
+  }
+  
   const parts = text.split(regex)
   
   return parts.map((part, index) => 
@@ -143,65 +155,10 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
     }
   }
 
-  // Fetch user attempts even when initialTests is provided
-  const fetchUserAttempts = useCallback(async (tests: Test[]) => {
-    if (tests.length === 0) {
-      setUserAttempts(new Map())
-      return
-    }
-    
-    const attemptMap = new Map<string, UserAttemptInfo>()
-    for (const test of tests) {
-      try {
-        const attemptsResponse = await fetch(`/api/tests/${test.id}/user-attempts`)
-        if (attemptsResponse.ok) {
-          const attemptsData = await attemptsResponse.json()
-          attemptMap.set(test.id, {
-            attemptsUsed: attemptsData.attemptsUsed || 0,
-            maxAttempts: test.maxAttempts,
-            hasReachedLimit: test.maxAttempts !== null && (attemptsData.attemptsUsed || 0) >= test.maxAttempts,
-          })
-        }
-      } catch (err) {
-        console.error(`Failed to fetch attempts for test ${test.id}:`, err)
-      }
-    }
-    setUserAttempts(attemptMap)
-  }, [])
-
-  // Fetch note sheet status for tests that allow note sheets
-  const fetchNoteSheets = useCallback(async (tests: Test[]) => {
-    if (tests.length === 0) {
-      return
-    }
-    
-    const noteSheetMap = new Map<string, { status: string; rejectionReason: string | null }>()
-    for (const test of tests) {
-      if (test.allowNoteSheet && test.startAt) {
-        try {
-          const noteSheetResponse = await fetch(`/api/tests/${test.id}/note-sheets`)
-          if (noteSheetResponse.ok) {
-            const noteSheetData = await noteSheetResponse.json()
-            if (noteSheetData.noteSheet) {
-              noteSheetMap.set(test.id, {
-                status: noteSheetData.noteSheet.status,
-                rejectionReason: noteSheetData.noteSheet.rejectionReason || null,
-              })
-            }
-          }
-        } catch (err) {
-          console.error(`Failed to fetch note sheet for test ${test.id}:`, err)
-        }
-      }
-    }
-    // Merge with existing note sheets instead of replacing
-    setNoteSheets(prev => {
-      const merged = new Map(prev)
-      noteSheetMap.forEach((value, key) => {
-        merged.set(key, value)
-      })
-      return merged
-    })
+  // Batch fetch user attempts and note sheets (now included in tests API response)
+  const updateUserAttemptsAndNoteSheets = useCallback((userAttemptsData: Record<string, UserAttemptInfo>, noteSheetsData: Record<string, { status: string; rejectionReason: string | null }>) => {
+    setUserAttempts(new Map(Object.entries(userAttemptsData)))
+    setNoteSheets(new Map(Object.entries(noteSheetsData)))
   }, [])
 
   const fetchTests = useCallback(async (options?: { silent?: boolean }) => {
@@ -222,13 +179,11 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
         }))
         setTests(testsWithCount)
 
-        // Fetch attempt counts for each test to show "Take Test" and "View Results" buttons
-        // Fetch note sheet status for each test
-        // Wait for user attempts and note sheets to load before setting loading to false
-        await Promise.all([
-          fetchUserAttempts(testsWithCount),
-          fetchNoteSheets(testsWithCount),
-        ])
+        // Update user attempts and note sheets from batched API response
+        updateUserAttemptsAndNoteSheets(
+          data.userAttempts || {},
+          data.noteSheets || {}
+        )
       } else {
         throw new Error('Failed to fetch tests')
       }
@@ -244,24 +199,34 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
         setLoading(false)
       }
     }
-  }, [clubId, isAdmin, toast, fetchUserAttempts, fetchNoteSheets])
+  }, [clubId, isAdmin, toast, updateUserAttemptsAndNoteSheets])
 
   useEffect(() => {
     // Skip initial fetch if we already have data from server
     if (!initialTests) {
       fetchTests()
     } else {
-      // Still fetch user attempts and note sheets even with initialTests, then set loading to false
+      // With initialTests, we still need to fetch user attempts and note sheets
+      // But we can do this in a single API call instead of N calls
       const loadInitialData = async () => {
-        await Promise.all([
-          fetchUserAttempts(normalizedInitialTests),
-          fetchNoteSheets(normalizedInitialTests),
-        ])
-        setLoading(false)
+        try {
+          const response = await fetch(`/api/tests?clubId=${clubId}`)
+          if (response.ok) {
+            const data = await response.json()
+            updateUserAttemptsAndNoteSheets(
+              data.userAttempts || {},
+              data.noteSheets || {}
+            )
+          }
+        } catch (error) {
+          console.error('Failed to fetch user attempts and note sheets:', error)
+        } finally {
+          setLoading(false)
+        }
       }
       loadInitialData()
     }
-  }, [fetchTests, initialTests, fetchUserAttempts, fetchNoteSheets, normalizedInitialTests])
+  }, [fetchTests, initialTests, clubId, updateUserAttemptsAndNoteSheets])
 
   useBackgroundRefresh(
     () => fetchTests({ silent: true }),
@@ -275,9 +240,16 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && tests.length > 0) {
-        // Refresh user attempts and note sheets when user returns to the page
-        fetchUserAttempts(tests)
-        fetchNoteSheets(tests)
+        // Refresh user attempts and note sheets via single API call
+        fetch(`/api/tests?clubId=${clubId}`)
+          .then(res => res.json())
+          .then(data => {
+            updateUserAttemptsAndNoteSheets(
+              data.userAttempts || {},
+              data.noteSheets || {}
+            )
+          })
+          .catch(err => console.error('Failed to refresh attempts and note sheets:', err))
       }
     }
 
@@ -285,7 +257,7 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [tests, fetchUserAttempts, fetchNoteSheets])
+  }, [tests, clubId, updateUserAttemptsAndNoteSheets])
 
   // Handle hash navigation - set up listener once, check hash when loading completes
   useEffect(() => {
@@ -404,23 +376,23 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
     }
   }
 
-  const handleViewTest = (test: Test) => {
+  const handleViewTest = useCallback((test: Test) => {
     // Navigate to test detail page
     // The page will automatically show the builder for drafts or detail view for published tests
     window.location.href = `/club/${clubId}/tests/${test.id}`
-  }
+  }, [clubId])
 
-  const handleViewResponses = (test: Test) => {
+  const handleViewResponses = useCallback((test: Test) => {
     // Navigate to test detail page with Responses tab (default)
     window.location.href = `/club/${clubId}/tests/${test.id}`
-  }
+  }, [clubId])
 
-  const handleViewSettings = (test: Test) => {
+  const handleViewSettings = useCallback((test: Test) => {
     // Navigate to test detail page with Settings tab
     window.location.href = `/club/${clubId}/tests/${test.id}?view=test`
-  }
+  }, [clubId])
 
-  const handleDuplicateTest = async (testId: string) => {
+  const handleDuplicateTest = useCallback(async (testId: string) => {
     try {
       const response = await fetch(`/api/tests/${testId}/duplicate`, {
         method: 'POST',
@@ -446,27 +418,38 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
         variant: 'destructive',
       })
     }
-  }
+  }, [toast, fetchTests])
 
-  const handleTakeTest = (test: Test) => {
+  const handleTakeTest = useCallback((test: Test) => {
     // Navigate to test player
     window.location.href = `/club/${clubId}/tests/${test.id}/take`
-  }
+  }, [clubId])
 
-  const handleNoteSheetUpload = (testId: string) => {
+  const handleNoteSheetUpload = useCallback((testId: string) => {
     const test = tests.find(t => t.id === testId)
     setNoteSheetTestId(testId)
     setNoteSheetInstructions(test?.noteSheetInstructions || null)
     setNoteSheetUploadOpen(true)
-  }
+  }, [tests])
 
   const handleNoteSheetSuccess = () => {
-    // Just refresh note sheets for the specific test, no need to reload everything
+    // Refresh note sheets for the specific test
     if (noteSheetTestId) {
-      const test = tests.find(t => t.id === noteSheetTestId)
-      if (test) {
-        fetchNoteSheets([test])
-      }
+      fetch(`/api/tests/${noteSheetTestId}/note-sheets`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.noteSheet) {
+            setNoteSheets(prev => {
+              const updated = new Map(prev)
+              updated.set(noteSheetTestId, {
+                status: data.noteSheet.status,
+                rejectionReason: data.noteSheet.rejectionReason || null,
+              })
+              return updated
+            })
+          }
+        })
+        .catch(err => console.error('Failed to refresh note sheet:', err))
     }
   }
 
@@ -582,7 +565,7 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
     return { drafts: draftsList, scheduled: scheduledList, opened: openedList, completed: completedList }
   }, [tests, searchQuery, statusFilter, isAdmin, userAttempts])
 
-  const renderTestCard = (test: Test) => {
+  const renderTestCard = useCallback((test: Test) => {
     const getCalculatorTypeLabel = () => {
       if (!test.allowCalculator || !test.calculatorType) return null
       if (test.calculatorType === 'FOUR_FUNCTION') return 'Four Function'
@@ -898,7 +881,7 @@ export default function TestsTab({ clubId, isAdmin, initialTests }: TestsTabProp
       </CardContent>
     </Card>
     )
-  }
+  }, [clubId, isAdmin, router, searchQuery, userAttempts, noteSheets, handleTakeTest, handleViewTest, handleViewResponses, handleViewSettings, handleDuplicateTest, handleNoteSheetUpload])
 
   if (loading) {
     return (
