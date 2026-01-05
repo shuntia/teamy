@@ -498,22 +498,29 @@ export function TournamentPageClient({
                   <div className="flex items-start gap-3">
                     <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
-                      <p className="font-medium">Date</p>
+                      <p className="font-medium">Date & Time</p>
                       <p className="text-sm text-muted-foreground">
-                        {format(new Date(tournament.startDate), 'EEEE, MMMM d, yyyy')}
-                        {tournament.startDate !== tournament.endDate && (
-                          <> - {format(new Date(tournament.endDate), 'MMMM d, yyyy')}</>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="font-medium">Time</p>
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(tournament.startTime), 'h:mm a')} - {format(new Date(tournament.endTime), 'h:mm a')}
+                        {(() => {
+                          const startDateTime = new Date(tournament.startTime)
+                          const endDateTime = new Date(tournament.endTime)
+                          const startDateOnly = new Date(startDateTime.getFullYear(), startDateTime.getMonth(), startDateTime.getDate())
+                          const endDateOnly = new Date(endDateTime.getFullYear(), endDateTime.getMonth(), endDateTime.getDate())
+                          const sameDay = startDateOnly.getTime() === endDateOnly.getTime()
+                          
+                          if (sameDay) {
+                            return (
+                              <>
+                                {format(startDateTime, 'MMM d, h:mm a')} – {format(endDateTime, 'h:mm a')}
+                              </>
+                            )
+                          } else {
+                            return (
+                              <>
+                                {format(startDateTime, 'MMM d, h:mm a')} – {format(endDateTime, 'MMM d, h:mm a')}
+                              </>
+                            )
+                          }
+                        })()}
                       </p>
                     </div>
                   </div>
@@ -898,6 +905,7 @@ export function TournamentPageClient({
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
               <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
               <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
+              <Link href="/contact" className="hover:text-foreground transition-colors">Contact</Link>
             </div>
             <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Teamy. All rights reserved.</p>
           </div>

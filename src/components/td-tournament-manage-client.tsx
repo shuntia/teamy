@@ -50,6 +50,7 @@ import {
   Eye,
   Unlock,
   Copy,
+  Save,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
@@ -331,8 +332,27 @@ export function TDTournamentManageClient({
     lateFeeStartDate?: string
   }>({})
   const [settingsForm, setSettingsForm] = useState({
-    startDate: tournament.startDate?.split('T')[0] || '',
-    endDate: tournament.endDate?.split('T')[0] || '',
+    // Extract dates from time fields to ensure consistency
+    startDate: tournament.startTime 
+      ? (() => {
+          const dt = new Date(tournament.startTime)
+          // Get date in local timezone to match what user sees
+          const year = dt.getFullYear()
+          const month = String(dt.getMonth() + 1).padStart(2, '0')
+          const day = String(dt.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        })()
+      : tournament.startDate?.split('T')[0] || '',
+    endDate: tournament.endTime 
+      ? (() => {
+          const dt = new Date(tournament.endTime)
+          // Get date in local timezone to match what user sees
+          const year = dt.getFullYear()
+          const month = String(dt.getMonth() + 1).padStart(2, '0')
+          const day = String(dt.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        })()
+      : tournament.endDate?.split('T')[0] || '',
     startTime: tournament.startTime?.slice(11, 16) || '',
     endTime: tournament.endTime?.slice(11, 16) || '',
     price: tournament.price?.toString() || '0',
@@ -1050,14 +1070,36 @@ export function TDTournamentManageClient({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          startDate: settingsForm.startDate ? new Date(settingsForm.startDate).toISOString() : null,
-          endDate: settingsForm.endDate ? new Date(settingsForm.endDate).toISOString() : null,
           startTime: settingsForm.startDate && settingsForm.startTime 
             ? new Date(`${settingsForm.startDate}T${settingsForm.startTime}`).toISOString() 
             : null,
           endTime: settingsForm.endDate && settingsForm.endTime 
             ? new Date(`${settingsForm.endDate}T${settingsForm.endTime}`).toISOString() 
             : null,
+          // Extract date-only values from the combined datetime to ensure consistency
+          // Use the date from the local time representation to match what users see
+          startDate: settingsForm.startDate && settingsForm.startTime 
+            ? (() => {
+                const dt = new Date(`${settingsForm.startDate}T${settingsForm.startTime}`)
+                // Get date components in local timezone (what user entered)
+                const year = dt.getFullYear()
+                const month = dt.getMonth()
+                const day = dt.getDate()
+                // Create UTC date at midnight for that date to avoid timezone shifts
+                return new Date(Date.UTC(year, month, day)).toISOString()
+              })()
+            : settingsForm.startDate ? new Date(settingsForm.startDate + 'T00:00:00').toISOString() : null,
+          endDate: settingsForm.endDate && settingsForm.endTime 
+            ? (() => {
+                const dt = new Date(`${settingsForm.endDate}T${settingsForm.endTime}`)
+                // Get date components in local timezone (what user entered)
+                const year = dt.getFullYear()
+                const month = dt.getMonth()
+                const day = dt.getDate()
+                // Create UTC date at midnight for that date to avoid timezone shifts
+                return new Date(Date.UTC(year, month, day)).toISOString()
+              })()
+            : settingsForm.endDate ? new Date(settingsForm.endDate + 'T00:00:00').toISOString() : null,
           price: settingsForm.price ? parseFloat(settingsForm.price) : 0,
           additionalTeamPrice: settingsForm.additionalTeamPrice ? parseFloat(settingsForm.additionalTeamPrice) : null,
           feeStructure: settingsForm.feeStructure,
@@ -3223,6 +3265,11 @@ export function TDTournamentManageClient({
                         onClick={handleSaveSettings} 
                         disabled={savingSettings || Object.values(settingsFormErrors).some(err => err !== undefined)}
                       >
+                        {savingSettings ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4 mr-2" />
+                        )}
                         {savingSettings ? 'Saving...' : 'Save Changes'}
                       </Button>
                     </div>
@@ -3267,7 +3314,7 @@ export function TDTournamentManageClient({
                           )}
                         </>
                       ) : (
-                        <p className="text-base font-semibold py-1.5">{tournament.startDate ? format(new Date(tournament.startDate), 'MMMM d, yyyy') : <span className="text-muted-foreground italic font-normal">Not set</span>}</p>
+                        <p className="text-base font-semibold py-1.5">{tournament.startTime ? format(new Date(tournament.startTime), 'MMMM d, yyyy') : <span className="text-muted-foreground italic font-normal">Not set</span>}</p>
                       )}
                     </div>
                     <div className="space-y-2">
@@ -3340,7 +3387,7 @@ export function TDTournamentManageClient({
                           )}
                         </>
                       ) : (
-                        <p className="text-base font-semibold py-1.5">{tournament.endDate ? format(new Date(tournament.endDate), 'MMMM d, yyyy') : <span className="text-muted-foreground italic font-normal">Not set</span>}</p>
+                        <p className="text-base font-semibold py-1.5">{tournament.endTime ? format(new Date(tournament.endTime), 'MMMM d, yyyy') : <span className="text-muted-foreground italic font-normal">Not set</span>}</p>
                       )}
                     </div>
                     <div className="space-y-2">

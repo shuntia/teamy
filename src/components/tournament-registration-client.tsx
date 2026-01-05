@@ -659,6 +659,7 @@ export function TournamentRegistrationClient({
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
               <Link href="/terms" className="hover:text-foreground">Terms</Link>
               <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
+              <Link href="/contact" className="hover:text-foreground">Contact</Link>
             </div>
             <span className="text-sm text-muted-foreground">
               © {new Date().getFullYear()} Teamy. All rights reserved.
