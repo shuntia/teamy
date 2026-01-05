@@ -331,6 +331,26 @@ export function TDTournamentManageClient({
     earlyBirdDeadline?: string
     lateFeeStartDate?: string
   }>({})
+
+  // Default test settings state
+  const [defaultTestSettings, setDefaultTestSettings] = useState<any>(null)
+  const [loadingDefaultTestSettings, setLoadingDefaultTestSettings] = useState(true)
+  const [isEditingDefaultTestSettings, setIsEditingDefaultTestSettings] = useState(false)
+  const [savingDefaultTestSettings, setSavingDefaultTestSettings] = useState(false)
+  const [defaultTestSettingsForm, setDefaultTestSettingsForm] = useState({
+    defaultDurationMinutes: '',
+    defaultStartAt: '',
+    defaultEndAt: '',
+    defaultReleaseScoresAt: '',
+    defaultScoreReleaseMode: 'FULL_TEST' as 'NONE' | 'SCORE_ONLY' | 'SCORE_WITH_WRONG' | 'FULL_TEST' | '',
+    defaultRequireFullscreen: true,
+    defaultAllowCalculator: false,
+    defaultCalculatorType: 'FOUR_FUNCTION' as 'FOUR_FUNCTION' | 'SCIENTIFIC' | 'GRAPHING' | '',
+    defaultAllowNoteSheet: false,
+    defaultAutoApproveNoteSheet: true,
+    defaultRequireOneSitting: true,
+    defaultMaxAttempts: '',
+  })
   const [settingsForm, setSettingsForm] = useState({
     // Extract dates from time fields to ensure consistency
     startDate: tournament.startTime 
@@ -593,6 +613,109 @@ export function TDTournamentManageClient({
   const handleSignOut = () => {
     signOut({ callbackUrl: '/td' })
   }
+
+  // Fetch default test settings
+  const fetchDefaultTestSettings = async () => {
+    setLoadingDefaultTestSettings(true)
+    try {
+      const res = await fetch(`/api/td/tournaments/${tournament.id}/default-test-settings`)
+      if (res.ok) {
+        const data = await res.json()
+        setDefaultTestSettings(data.defaultTestSettings)
+        // Populate form with existing values
+        if (data.defaultTestSettings) {
+          setDefaultTestSettingsForm({
+            defaultDurationMinutes: data.defaultTestSettings.defaultDurationMinutes?.toString() || '',
+            defaultStartAt: data.defaultTestSettings.defaultStartAt 
+              ? new Date(data.defaultTestSettings.defaultStartAt).toISOString().slice(0, 16)
+              : '',
+            defaultEndAt: data.defaultTestSettings.defaultEndAt 
+              ? new Date(data.defaultTestSettings.defaultEndAt).toISOString().slice(0, 16)
+              : '',
+            defaultReleaseScoresAt: data.defaultTestSettings.defaultReleaseScoresAt 
+              ? new Date(data.defaultTestSettings.defaultReleaseScoresAt).toISOString().slice(0, 16)
+              : '',
+            defaultScoreReleaseMode: data.defaultTestSettings.defaultScoreReleaseMode || 'FULL_TEST',
+            defaultRequireFullscreen: data.defaultTestSettings.defaultRequireFullscreen ?? true,
+            defaultAllowCalculator: data.defaultTestSettings.defaultAllowCalculator ?? false,
+            defaultCalculatorType: data.defaultTestSettings.defaultCalculatorType || 'FOUR_FUNCTION',
+            defaultAllowNoteSheet: data.defaultTestSettings.defaultAllowNoteSheet ?? false,
+            defaultAutoApproveNoteSheet: data.defaultTestSettings.defaultAutoApproveNoteSheet ?? true,
+            defaultRequireOneSitting: data.defaultTestSettings.defaultRequireOneSitting ?? true,
+            defaultMaxAttempts: data.defaultTestSettings.defaultMaxAttempts?.toString() || '',
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch default test settings:', error)
+    } finally {
+      setLoadingDefaultTestSettings(false)
+    }
+  }
+
+  // Save default test settings
+  const handleSaveDefaultTestSettings = async () => {
+    setSavingDefaultTestSettings(true)
+    try {
+      const res = await fetch(`/api/td/tournaments/${tournament.id}/default-test-settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          defaultDurationMinutes: defaultTestSettingsForm.defaultDurationMinutes 
+            ? parseInt(defaultTestSettingsForm.defaultDurationMinutes) 
+            : null,
+          defaultStartAt: defaultTestSettingsForm.defaultStartAt 
+            ? new Date(defaultTestSettingsForm.defaultStartAt).toISOString()
+            : null,
+          defaultEndAt: defaultTestSettingsForm.defaultEndAt 
+            ? new Date(defaultTestSettingsForm.defaultEndAt).toISOString()
+            : null,
+          defaultReleaseScoresAt: defaultTestSettingsForm.defaultReleaseScoresAt 
+            ? new Date(defaultTestSettingsForm.defaultReleaseScoresAt).toISOString()
+            : null,
+          defaultScoreReleaseMode: defaultTestSettingsForm.defaultScoreReleaseMode && defaultTestSettingsForm.defaultScoreReleaseMode !== '' 
+            ? defaultTestSettingsForm.defaultScoreReleaseMode 
+            : null,
+          defaultRequireFullscreen: defaultTestSettingsForm.defaultRequireFullscreen,
+          defaultAllowCalculator: defaultTestSettingsForm.defaultAllowCalculator,
+          defaultCalculatorType: defaultTestSettingsForm.defaultAllowCalculator && defaultTestSettingsForm.defaultCalculatorType
+            ? defaultTestSettingsForm.defaultCalculatorType
+            : null,
+          defaultAllowNoteSheet: defaultTestSettingsForm.defaultAllowNoteSheet,
+          defaultAutoApproveNoteSheet: defaultTestSettingsForm.defaultAllowNoteSheet && defaultTestSettingsForm.defaultAutoApproveNoteSheet,
+          defaultRequireOneSitting: defaultTestSettingsForm.defaultRequireOneSitting,
+          defaultMaxAttempts: defaultTestSettingsForm.defaultMaxAttempts 
+            ? parseInt(defaultTestSettingsForm.defaultMaxAttempts) 
+            : null,
+        }),
+      })
+
+      if (res.ok) {
+        toast({
+          title: 'Default test settings saved',
+          description: 'These settings will be applied when tests are published.',
+        })
+        setIsEditingDefaultTestSettings(false)
+        await fetchDefaultTestSettings()
+      } else {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to save default test settings')
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to save default test settings',
+        variant: 'destructive',
+      })
+    } finally {
+      setSavingDefaultTestSettings(false)
+    }
+  }
+
+  // Fetch default test settings on mount
+  useEffect(() => {
+    fetchDefaultTestSettings()
+  }, [tournament.id])
 
   // Fetch staff
   const fetchStaff = async () => {
@@ -3983,6 +4106,317 @@ export function TDTournamentManageClient({
                     )}
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Default Test Settings Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Default Test Creation Settings
+                    </CardTitle>
+                    <CardDescription>
+                      Configure default settings that will be applied when tests are published
+                    </CardDescription>
+                  </div>
+                  {!isEditingDefaultTestSettings ? (
+                    <Button onClick={() => setIsEditingDefaultTestSettings(true)}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit Defaults
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => {
+                        setIsEditingDefaultTestSettings(false)
+                        fetchDefaultTestSettings() // Reset form
+                      }}>
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={handleSaveDefaultTestSettings} 
+                        disabled={savingDefaultTestSettings}
+                      >
+                        {savingDefaultTestSettings ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4 mr-2" />
+                        )}
+                        {savingDefaultTestSettings ? 'Saving...' : 'Save Defaults'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {loadingDefaultTestSettings ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Time Limit */}
+                    <div className="grid gap-5 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Default Time Limit (minutes)</Label>
+                        {isEditingDefaultTestSettings ? (
+                          <Input
+                            type="number"
+                            min="1"
+                            value={defaultTestSettingsForm.defaultDurationMinutes}
+                            onChange={e => setDefaultTestSettingsForm(prev => ({ ...prev, defaultDurationMinutes: e.target.value }))}
+                            placeholder="e.g., 60"
+                          />
+                        ) : (
+                          <p className="text-base font-semibold py-1.5">
+                            {defaultTestSettings?.defaultDurationMinutes 
+                              ? `${defaultTestSettings.defaultDurationMinutes} minutes` 
+                              : <span className="text-muted-foreground italic font-normal">Not set</span>}
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Default Max Attempts</Label>
+                        {isEditingDefaultTestSettings ? (
+                          <Input
+                            type="number"
+                            min="1"
+                            value={defaultTestSettingsForm.defaultMaxAttempts}
+                            onChange={e => setDefaultTestSettingsForm(prev => ({ ...prev, defaultMaxAttempts: e.target.value }))}
+                            placeholder="e.g., 1"
+                          />
+                        ) : (
+                          <p className="text-base font-semibold py-1.5">
+                            {defaultTestSettings?.defaultMaxAttempts 
+                              ? defaultTestSettings.defaultMaxAttempts 
+                              : <span className="text-muted-foreground italic font-normal">Unlimited</span>}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Test Taking Window */}
+                    <div className="border-t pt-6">
+                      <h3 className="text-base font-semibold mb-4 text-foreground">Test Taking Window</h3>
+                      <div className="grid gap-5 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Default Start Date/Time</Label>
+                          {isEditingDefaultTestSettings ? (
+                            <Input
+                              type="datetime-local"
+                              value={defaultTestSettingsForm.defaultStartAt}
+                              onChange={e => setDefaultTestSettingsForm(prev => ({ ...prev, defaultStartAt: e.target.value }))}
+                            />
+                          ) : (
+                            <p className="text-base font-semibold py-1.5">
+                              {defaultTestSettings?.defaultStartAt 
+                                ? format(new Date(defaultTestSettings.defaultStartAt), 'MMMM d, yyyy h:mm a') 
+                                : <span className="text-muted-foreground italic font-normal">Not set</span>}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Default End Date/Time</Label>
+                          {isEditingDefaultTestSettings ? (
+                            <Input
+                              type="datetime-local"
+                              value={defaultTestSettingsForm.defaultEndAt}
+                              min={defaultTestSettingsForm.defaultStartAt || undefined}
+                              onChange={e => setDefaultTestSettingsForm(prev => ({ ...prev, defaultEndAt: e.target.value }))}
+                            />
+                          ) : (
+                            <p className="text-base font-semibold py-1.5">
+                              {defaultTestSettings?.defaultEndAt 
+                                ? format(new Date(defaultTestSettings.defaultEndAt), 'MMMM d, yyyy h:mm a') 
+                                : <span className="text-muted-foreground italic font-normal">Not set</span>}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Score Release */}
+                    <div className="border-t pt-6">
+                      <h3 className="text-base font-semibold mb-4 text-foreground">Score Release</h3>
+                      <div className="grid gap-5 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Default Release Date</Label>
+                          {isEditingDefaultTestSettings ? (
+                            <Input
+                              type="datetime-local"
+                              value={defaultTestSettingsForm.defaultReleaseScoresAt}
+                              onChange={e => setDefaultTestSettingsForm(prev => ({ ...prev, defaultReleaseScoresAt: e.target.value }))}
+                            />
+                          ) : (
+                            <p className="text-base font-semibold py-1.5">
+                              {defaultTestSettings?.defaultReleaseScoresAt 
+                                ? format(new Date(defaultTestSettings.defaultReleaseScoresAt), 'MMMM d, yyyy h:mm a') 
+                                : <span className="text-muted-foreground italic font-normal">Not set</span>}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Default Release Mode</Label>
+                          {isEditingDefaultTestSettings ? (
+                            <Select
+                              value={defaultTestSettingsForm.defaultScoreReleaseMode}
+                              onValueChange={(value: 'NONE' | 'SCORE_ONLY' | 'SCORE_WITH_WRONG' | 'FULL_TEST') => 
+                                setDefaultTestSettingsForm(prev => ({ ...prev, defaultScoreReleaseMode: value }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select release mode" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="NONE">None</SelectItem>
+                                <SelectItem value="SCORE_ONLY">Score Only</SelectItem>
+                                <SelectItem value="SCORE_WITH_WRONG">Score with Wrong Answers</SelectItem>
+                                <SelectItem value="FULL_TEST">Full Test</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <p className="text-base font-semibold py-1.5">
+                              {defaultTestSettings?.defaultScoreReleaseMode 
+                                ? defaultTestSettings.defaultScoreReleaseMode.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                : <span className="text-muted-foreground italic font-normal">Not set</span>}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Test Settings */}
+                    <div className="border-t pt-6">
+                      <h3 className="text-base font-semibold mb-4 text-foreground">Test Settings</h3>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Require Fullscreen</Label>
+                            <p className="text-sm text-muted-foreground">Force students to use fullscreen mode</p>
+                          </div>
+                          {isEditingDefaultTestSettings ? (
+                            <Checkbox
+                              checked={defaultTestSettingsForm.defaultRequireFullscreen}
+                              onCheckedChange={(checked) => 
+                                setDefaultTestSettingsForm(prev => ({ ...prev, defaultRequireFullscreen: checked as boolean }))
+                              }
+                            />
+                          ) : (
+                            <Badge variant={(defaultTestSettings?.defaultRequireFullscreen ?? true) ? 'default' : 'secondary'}>
+                              {(defaultTestSettings?.defaultRequireFullscreen ?? true) ? 'Yes' : 'No'}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Require One Sitting</Label>
+                            <p className="text-sm text-muted-foreground">Students must complete test in one session</p>
+                          </div>
+                          {isEditingDefaultTestSettings ? (
+                            <Checkbox
+                              checked={defaultTestSettingsForm.defaultRequireOneSitting}
+                              onCheckedChange={(checked) => 
+                                setDefaultTestSettingsForm(prev => ({ ...prev, defaultRequireOneSitting: checked as boolean }))
+                              }
+                            />
+                          ) : (
+                            <Badge variant={defaultTestSettings?.defaultRequireOneSitting !== false ? 'default' : 'secondary'}>
+                              {defaultTestSettings?.defaultRequireOneSitting !== false ? 'Yes' : 'No'}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Allow Calculator</Label>
+                            <p className="text-sm text-muted-foreground">Enable calculator for students</p>
+                          </div>
+                          {isEditingDefaultTestSettings ? (
+                            <Checkbox
+                              checked={defaultTestSettingsForm.defaultAllowCalculator}
+                              onCheckedChange={(checked) => 
+                                setDefaultTestSettingsForm(prev => ({ ...prev, defaultAllowCalculator: checked as boolean }))
+                              }
+                            />
+                          ) : (
+                            <Badge variant={defaultTestSettings?.defaultAllowCalculator ? 'default' : 'secondary'}>
+                              {defaultTestSettings?.defaultAllowCalculator ? 'Yes' : 'No'}
+                            </Badge>
+                          )}
+                        </div>
+                        {defaultTestSettingsForm.defaultAllowCalculator && isEditingDefaultTestSettings && (
+                          <div className="ml-6 space-y-2">
+                            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Calculator Type</Label>
+                            <Select
+                              value={defaultTestSettingsForm.defaultCalculatorType}
+                              onValueChange={(value: 'FOUR_FUNCTION' | 'SCIENTIFIC' | 'GRAPHING') => 
+                                setDefaultTestSettingsForm(prev => ({ ...prev, defaultCalculatorType: value }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select calculator type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="FOUR_FUNCTION">4-Function</SelectItem>
+                                <SelectItem value="SCIENTIFIC">Scientific</SelectItem>
+                                <SelectItem value="GRAPHING">Graphing</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {defaultTestSettings?.defaultAllowCalculator && !isEditingDefaultTestSettings && (
+                          <div className="ml-6">
+                            <p className="text-sm text-muted-foreground">
+                              Type: {defaultTestSettings.defaultCalculatorType?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not set'}
+                            </p>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label>Allow Note Sheet</Label>
+                            <p className="text-sm text-muted-foreground">Students can upload note sheets</p>
+                          </div>
+                          {isEditingDefaultTestSettings ? (
+                            <Checkbox
+                              checked={defaultTestSettingsForm.defaultAllowNoteSheet}
+                              onCheckedChange={(checked) => 
+                                setDefaultTestSettingsForm(prev => ({ ...prev, defaultAllowNoteSheet: checked as boolean }))
+                              }
+                            />
+                          ) : (
+                            <Badge variant={defaultTestSettings?.defaultAllowNoteSheet ? 'default' : 'secondary'}>
+                              {defaultTestSettings?.defaultAllowNoteSheet ? 'Yes' : 'No'}
+                            </Badge>
+                          )}
+                        </div>
+                        {defaultTestSettingsForm.defaultAllowNoteSheet && isEditingDefaultTestSettings && (
+                          <div className="ml-6 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <Label>Auto-Approve Note Sheets</Label>
+                                <p className="text-sm text-muted-foreground">Automatically approve uploaded note sheets</p>
+                              </div>
+                              <Checkbox
+                                checked={defaultTestSettingsForm.defaultAutoApproveNoteSheet}
+                                onCheckedChange={(checked) => 
+                                  setDefaultTestSettingsForm(prev => ({ ...prev, defaultAutoApproveNoteSheet: checked as boolean }))
+                                }
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {defaultTestSettings?.defaultAllowNoteSheet && !isEditingDefaultTestSettings && (
+                          <div className="ml-6">
+                            <p className="text-sm text-muted-foreground">
+                              Auto-approve: {defaultTestSettings.defaultAutoApproveNoteSheet !== false ? 'Yes' : 'No'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
