@@ -17,11 +17,11 @@ const stickyScrollContent = [
     title: 'Communication Hub',
     description: 'Keep your team connected with announcements, threaded replies, reactions, and email notifications. Share updates with specific roles or the entire team. Real-time notifications ensure everyone stays informed.',
     content: (
-      <div className="h-full w-full flex items-center justify-center p-8">
-        <div className="bg-card rounded-xl p-6 shadow-lg w-full border border-teamy-primary/10">
+      <div className="h-full w-full flex items-center justify-center p-6">
+        <div className="bg-card rounded-xl p-6 shadow-lg w-full max-w-full border border-teamy-primary/10">
           <div className="flex items-center gap-3 mb-4">
-            <MessageSquare className="h-8 w-8 text-teamy-primary" />
-            <h3 className="font-bold text-lg text-foreground">Team Announcements</h3>
+            <MessageSquare className="h-8 w-8 text-teamy-primary flex-shrink-0" />
+            <h3 className="font-bold text-lg text-foreground leading-tight">Team Announcements</h3>
           </div>
           <p className="text-sm text-muted-foreground">Stay connected and informed with real-time updates</p>
         </div>
