@@ -170,9 +170,8 @@ export function HomeNav({ variant = 'default', mobileButton }: HomeNavProps) {
       {/* Dropdown Portal - Rendered outside container */}
       {openDropdown && (
         <div
-          className="fixed z-[9999]"
+          className="fixed z-[9999] mt-1.5"
           style={{
-            marginTop: '5px',
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
           }}
