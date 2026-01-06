@@ -642,7 +642,7 @@ export function ClubPage({ club, currentMembership, user, initialData }: ClubPag
   ), [activeTab, tabNotifications, handleTabChange, isAdmin])
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 grid-pattern" style={backgroundStyle}>
+    <div className="min-h-screen bg-background grid-pattern" style={backgroundStyle}>
       {showAnimatedBlobs && (
         <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 dark:hidden">
           <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-cyan-400/20 rounded-full mix-blend-multiply dark:mix-blend-soft-light filter blur-3xl opacity-40 animate-blob"></div>
@@ -663,7 +663,7 @@ export function ClubPage({ club, currentMembership, user, initialData }: ClubPag
         <div className="flex gap-4 sm:gap-6 lg:gap-8 items-start">
           <aside className="w-48 lg:w-52 flex-shrink-0 hidden md:block self-start">
             <div className="sticky top-24 will-change-transform">
-              <nav className="space-y-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/50 dark:border-gray-800/50 p-3 rounded-2xl shadow-lg">
+              <nav className="space-y-2 bg-card/80 backdrop-blur-sm border border-border/50 p-3 rounded-2xl shadow-lg">
                 {renderNavigationButtons()}
               </nav>
             </div>
@@ -674,7 +674,7 @@ export function ClubPage({ club, currentMembership, user, initialData }: ClubPag
               variant="outline"
               size="sm"
               onClick={() => setMobileMenuOpen(true)}
-              className="h-7 w-7 sm:h-8 sm:w-8 p-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm border border-gray-200/50 dark:border-gray-800/50 shadow-lg hover:bg-white dark:hover:bg-gray-900"
+              className="h-7 w-7 sm:h-8 sm:w-8 p-0 bg-card/90 backdrop-blur-sm border border-border/50 shadow-lg hover:bg-card"
             >
               <Menu className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span className="sr-only">Open menu</span>
@@ -682,8 +682,8 @@ export function ClubPage({ club, currentMembership, user, initialData }: ClubPag
           </div>
 
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-            <SheetContent side="left" className="w-[260px] sm:w-[280px] p-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm">
-              <SheetHeader className="p-4 sm:p-6 pb-3 sm:pb-4 border-b border-gray-200/50 dark:border-gray-800/50">
+            <SheetContent side="left" className="w-[260px] sm:w-[280px] p-0 bg-card/95 backdrop-blur-sm">
+              <SheetHeader className="p-4 sm:p-6 pb-3 sm:pb-4 border-b border-border/50">
                 <SheetTitle className="text-base sm:text-lg font-semibold">Navigation</SheetTitle>
               </SheetHeader>
               <nav className="p-3 sm:p-4 space-y-1.5 sm:space-y-2 overflow-y-auto max-h-[calc(100vh-100px)]">
@@ -694,11 +694,11 @@ export function ClubPage({ club, currentMembership, user, initialData }: ClubPag
 
           <div className="flex-1 min-w-0 md:pl-0 pl-9 sm:pl-10 flex flex-col min-h-0">
             {activeTab === 'settings' && (
-              <div className="mb-4 sm:mb-5 md:mb-6 p-4 sm:p-5 md:p-6 rounded-2xl bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/50 dark:border-gray-800/50">
+              <div className="mb-4 sm:mb-5 md:mb-6 p-4 sm:p-5 md:p-6 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/50">
                 <div className="flex items-center justify-between flex-wrap gap-3 sm:gap-4">
                   <div>
                     <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
-                      <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white break-words">{currentClubName}</h2>
+                      <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground break-words">{currentClubName}</h2>
                       {isAdmin && (
                         <Button
                           variant="ghost"
@@ -707,7 +707,7 @@ export function ClubPage({ club, currentMembership, user, initialData }: ClubPag
                             setNewClubName(currentClubName)
                             setEditClubNameOpen(true)
                           }}
-                          className="h-7 w-7 sm:h-8 sm:w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-800 flex-shrink-0"
+                          className="h-7 w-7 sm:h-8 sm:w-8 p-0 hover:bg-muted flex-shrink-0"
                         >
                           <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
@@ -716,7 +716,7 @@ export function ClubPage({ club, currentMembership, user, initialData }: ClubPag
                         Division {club.division}
                       </Badge>
                     </div>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                    <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2">
                       <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       {club.memberships.length} member{club.memberships.length !== 1 ? 's' : ''}
                     </p>

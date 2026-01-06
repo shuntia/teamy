@@ -147,7 +147,7 @@ export default function DevPage() {
     return (
       <div className="min-h-screen bg-background text-foreground grid-pattern">
         {/* Header */}
-        <header className="sticky top-4 z-50 mx-4 rounded-2xl border border-white/10 bg-teamy-primary/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-lg dark:shadow-xl">
+        <header className="sticky top-4 z-50 mx-4 rounded-2xl border border-white/10 bg-teamy-primary/90 dark:bg-popover/90 backdrop-blur-xl shadow-lg dark:shadow-xl">
           <div className="container mx-auto px-6 py-4 flex items-center justify-between">
             <Logo size="md" href="/" variant="light" />
           </div>
@@ -264,7 +264,7 @@ export default function DevPage() {
           {/* Sidebar */}
           <aside className="w-48 lg:w-52 flex-shrink-0 hidden md:block self-start">
             <div className="sticky top-24 will-change-transform">
-              <nav className="space-y-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/50 dark:border-gray-800/50 p-3 rounded-2xl shadow-lg">
+              <nav className="space-y-2 bg-card/80 backdrop-blur-sm border border-border/50 p-3 rounded-2xl shadow-lg">
                 {navItems.map((item) => {
                   const Icon = item.icon
                   const isActive = activeSection === item.id

@@ -141,7 +141,7 @@ function SortableWidgetItem({
             {...listeners}
             className="absolute top-2 left-2 z-20 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
-            <GripVertical className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+            <GripVertical className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="absolute top-2 right-2 z-10 flex gap-2">
             <Button
@@ -188,8 +188,8 @@ function SortableWidgetItem({
           {renderWidget(widget)}
         </div>
       ) : (
-        <div className="h-full border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg flex items-center justify-center p-6 bg-gray-50 dark:bg-gray-900">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+        <div className="h-full border-2 border-dashed border-border rounded-lg flex items-center justify-center p-6 bg-muted">
+          <p className="text-sm text-muted-foreground">
             Hidden Widget
           </p>
         </div>
@@ -578,7 +578,7 @@ export function HomePageTab({ clubId, club, isAdmin, user, initialEvents, initia
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-xl sm:text-2xl font-bold truncate">Home</h2>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 truncate">
+          <p className="text-sm sm:text-base text-muted-foreground truncate">
             Welcome back to {club.name}
           </p>
         </div>
@@ -611,8 +611,8 @@ export function HomePageTab({ clubId, club, isAdmin, user, initialEvents, initia
 
       {/* Widgets Grid */}
       {visibleWidgets.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
-          <p className="text-gray-600 dark:text-gray-400 mb-4 px-4">
+        <div className="text-center py-12 bg-card rounded-2xl border border-border">
+          <p className="text-muted-foreground mb-4 px-4">
             No widgets configured yet
           </p>
           {canConfigureWidgets && (

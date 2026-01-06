@@ -383,7 +383,7 @@ export function TournamentPageClient({
   return (
     <div className="min-h-screen bg-background text-foreground grid-pattern flex flex-col">
       {/* Header */}
-      <header className="sticky top-4 z-50 mx-4 rounded-2xl border border-white/10 bg-teamy-primary/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-lg dark:shadow-xl">
+      <header className="sticky top-4 z-50 mx-4 rounded-2xl border border-white/10 bg-teamy-primary/90 dark:bg-popover/90 backdrop-blur-xl shadow-lg dark:shadow-xl">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Logo size="md" href="/" variant="light" />
           <div className="flex items-center gap-4">
@@ -421,10 +421,10 @@ export function TournamentPageClient({
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Link href={`/login?callbackUrl=${encodeURIComponent(`/tournaments/${hostingRequest.preferredSlug || tournament?.slug || tournament?.id || hostingRequest.id}`)}`}>
-                <Button variant="ghost" size="sm" className="text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+              <Link href={`/login?callbackUrl=${encodeURIComponent(`/tournaments/${hostingRequest.preferredSlug || tournament?.slug || tournament?.id || hostingRequest.id}`)}`} className="hidden md:block">
+                <button className="px-5 md:px-6 py-2 md:py-2.5 text-xs md:text-sm font-semibold bg-white text-teamy-primary rounded-full hover:bg-white/90 transition-colors whitespace-nowrap shadow-sm">
                   Sign In
-                </Button>
+                </button>
               </Link>
             )}
             <ThemeToggle variant="header" />

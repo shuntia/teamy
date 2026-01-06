@@ -15,7 +15,7 @@ export default function NotFound() {
   }, [])
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden grid-pattern" style={{ backgroundColor: 'hsl(var(--card))' }}>
+    <div className="min-h-screen flex flex-col relative overflow-hidden grid-pattern bg-background">
       {/* Main content */}
       <div className="flex-1 flex items-center justify-center p-4 relative z-10">
         <div className="w-full max-w-2xl">

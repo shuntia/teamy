@@ -24,7 +24,7 @@ export function TestingLoginClient({ unauthorized, email }: TestingLoginClientPr
   return (
     <div className="min-h-screen bg-background text-foreground grid-pattern">
       {/* Header */}
-      <header className="sticky top-4 z-50 mx-4 rounded-2xl border border-white/10 bg-teamy-primary/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-lg dark:shadow-xl">
+      <header className="sticky top-4 z-50 mx-4 rounded-2xl border border-white/10 bg-teamy-primary/90 dark:bg-popover/90 backdrop-blur-xl shadow-lg dark:shadow-xl">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Logo size="md" href="/" variant="light" />

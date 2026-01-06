@@ -241,7 +241,7 @@ export function HomeNav({ variant = 'default', mobileButton }: HomeNavProps) {
           <div className={cn(
             "absolute top-full left-0 right-0 border-b backdrop-blur-xl max-h-[80vh] overflow-y-auto",
             isLight 
-              ? "bg-teamy-primary/95 dark:bg-slate-900/95 border-white/10" 
+              ? "bg-teamy-primary/95 dark:bg-popover/95 border-white/10" 
               : "bg-background/95 border-border"
           )}>
             <nav className="container mx-auto px-6 py-4 flex flex-col gap-1">
