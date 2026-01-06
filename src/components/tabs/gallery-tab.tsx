@@ -48,13 +48,15 @@ interface GalleryTabProps {
   clubId: string
   user: any
   isAdmin: boolean
+  initialMediaItems?: any[]
+  initialAlbums?: any[]
 }
 
-export function GalleryTab({ clubId, user, isAdmin }: GalleryTabProps) {
+export function GalleryTab({ clubId, user, isAdmin, initialMediaItems, initialAlbums }: GalleryTabProps) {
   const { toast } = useToast()
-  const [mediaItems, setMediaItems] = useState<any[]>([])
-  const [albums, setAlbums] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [mediaItems, setMediaItems] = useState<any[]>(initialMediaItems || [])
+  const [albums, setAlbums] = useState<any[]>(initialAlbums || [])
+  const [loading, setLoading] = useState(!(initialMediaItems && initialAlbums))
   const [uploading, setUploading] = useState(false)
   const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
@@ -75,9 +77,17 @@ export function GalleryTab({ clubId, user, isAdmin }: GalleryTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetchMedia()
-    fetchAlbums()
-  }, [clubId, selectedAlbum, filterType])
+    // Only fetch if we don't have initial data, or if filters changed
+    if (!initialMediaItems || !initialAlbums || selectedAlbum || filterType !== 'all') {
+      setLoading(true)
+      // Batch fetch both in parallel
+      Promise.all([fetchMedia(), fetchAlbums()]).finally(() => {
+        setLoading(false)
+      })
+    } else {
+      setLoading(false)
+    }
+  }, [clubId, selectedAlbum, filterType, initialMediaItems, initialAlbums])
 
   const fetchMedia = async () => {
     try {
@@ -102,8 +112,6 @@ export function GalleryTab({ clubId, user, isAdmin }: GalleryTabProps) {
         description: 'Failed to load media',
         variant: 'destructive',
       })
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -115,6 +123,8 @@ export function GalleryTab({ clubId, user, isAdmin }: GalleryTabProps) {
       setAlbums(data.albums || [])
     } catch (error) {
       console.error('Failed to fetch albums:', error)
+    } finally {
+      setLoading(false)
     }
   }
 

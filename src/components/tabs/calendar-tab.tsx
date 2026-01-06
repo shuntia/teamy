@@ -208,12 +208,20 @@ export function CalendarTab({ clubId, currentMembership, isAdmin, user, initialE
   }, [clubId])
 
   useEffect(() => {
+    // Fetch missing data in parallel
+    const promises: Promise<void>[] = []
+    
     // Skip initial fetch if we already have data from server
     if (!initialEvents) {
-      fetchEvents()
+      promises.push(fetchEvents())
     }
-    fetchTeams()
-    fetchAvailableEvents()
+    
+    promises.push(
+      fetchTeams(),
+      fetchAvailableEvents()
+    )
+    
+    Promise.all(promises)
   }, [fetchEvents, fetchTeams, fetchAvailableEvents, initialEvents])
 
   useBackgroundRefresh(

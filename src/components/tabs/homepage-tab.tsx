@@ -224,9 +224,14 @@ export function HomePageTab({ clubId, club, isAdmin, user, initialEvents, initia
 
   useEffect(() => {
     if (!user?.id) return
-    fetchWidgets()
-    fetchData()
-  }, [clubId, user?.id])
+    // Fetch widgets and data in parallel if needed
+    const promises: Promise<void>[] = [fetchWidgets()]
+    // Only fetch data if we don't have all initial data
+    if (!initialAnnouncements || !initialEvents || !initialTests) {
+      promises.push(fetchData())
+    }
+    Promise.all(promises)
+  }, [clubId, user?.id, initialAnnouncements, initialEvents, initialTests])
 
   // Calculate stats when data changes
   useEffect(() => {
@@ -258,32 +263,37 @@ export function HomePageTab({ clubId, club, isAdmin, user, initialEvents, initia
 
   const fetchData = async () => {
     try {
-      // Only fetch if we don't have initial data
+      // Batch fetch all missing data in parallel
+      const promises: Promise<void>[] = []
+      
       if (!initialAnnouncements) {
-        const announcementsRes = await fetch(`/api/announcements?clubId=${clubId}`)
-        if (announcementsRes.ok) {
-          const data = await announcementsRes.json()
-          setAnnouncements(data.announcements || [])
-        }
+        promises.push(
+          fetch(`/api/announcements?clubId=${clubId}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => data && setAnnouncements(data.announcements || []))
+            .catch(err => console.error('Failed to fetch announcements:', err))
+        )
       }
 
-      // Only fetch if we don't have initial data
       if (!initialEvents) {
-        const eventsRes = await fetch(`/api/calendar?clubId=${clubId}`)
-        if (eventsRes.ok) {
-          const data = await eventsRes.json()
-          setEvents(data.events || [])
-        }
+        promises.push(
+          fetch(`/api/calendar?clubId=${clubId}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => data && setEvents(data.events || []))
+            .catch(err => console.error('Failed to fetch events:', err))
+        )
       }
 
-      // Only fetch if we don't have initial data
       if (!initialTests) {
-        const testsRes = await fetch(`/api/tests?clubId=${clubId}`)
-        if (testsRes.ok) {
-          const data = await testsRes.json()
-          setTests(data.tests || [])
-        }
+        promises.push(
+          fetch(`/api/tests?clubId=${clubId}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => data && setTests(data.tests || []))
+            .catch(err => console.error('Failed to fetch tests:', err))
+        )
       }
+
+      await Promise.all(promises)
 
       // Calculate stats - use current state values
       setStats(prev => ({
