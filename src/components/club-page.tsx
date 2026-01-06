@@ -641,13 +641,11 @@ export function ClubPage({ club, currentMembership, user, initialData }: ClubPag
   ), [activeTab, tabNotifications, handleTabChange, isAdmin])
 
   return (
-    <div className="min-h-screen bg-background grid-pattern" style={backgroundStyle}>
-      {showGridPattern && (
-        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] dark:bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)]"></div>
-        </div>
-      )}
-
+    <div 
+      id="club-page-container"
+      className="min-h-screen bg-background grid-pattern"
+      style={backgroundStyle}
+    >
       <AppHeader user={user} showBackButton={true} backHref="/dashboard" title={currentClubName} />
 
       <main className="relative z-10 container mx-auto px-3 sm:px-4 py-4 sm:py-6 md:py-8 max-w-full overflow-x-hidden">
