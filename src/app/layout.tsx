@@ -186,7 +186,7 @@ export default async function RootLayout({
   const bodyClass = generateBodyClass(preferences)
   
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="font-sans" suppressHydrationWarning>
       <body className={`font-sans antialiased ${bodyClass}`} suppressHydrationWarning>
         {/* Critical blocking script: Apply styles immediately before any rendering */}
         <script

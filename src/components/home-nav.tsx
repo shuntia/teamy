@@ -193,7 +193,7 @@ export function HomeNav({ variant = 'default', mobileButton }: HomeNavProps) {
               ? "bg-popover border-border"
               : "bg-background border-border"
           )}>
-            <div className="p-1.5">
+            <div className="p-2 space-y-2">
               {navItems
                 .find(item => item.label === openDropdown)
                 ?.items?.map((subItem) => {
@@ -203,7 +203,7 @@ export function HomeNav({ variant = 'default', mobileButton }: HomeNavProps) {
                       key={subItem.href}
                       href={subItem.href}
                       className={cn(
-                        "block px-4 py-2 rounded-lg transition-colors text-sm font-medium",
+                        "block px-4 py-3 rounded-lg transition-colors text-base leading-tight font-sans font-medium",
                         active
                           ? "bg-teamy-primary/10 text-teamy-primary"
                           : "text-foreground hover:bg-secondary"
