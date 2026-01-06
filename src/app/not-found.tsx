@@ -37,7 +37,7 @@ export default function NotFound() {
 
           {/* Content card with backdrop blur */}
           <div 
-            className={`backdrop-blur-xl bg-background/60 dark:bg-card dark:border-border/50 rounded-3xl p-8 md:p-12 shadow-2xl transition-all duration-1000 ${
+            className={`rounded-3xl border border-border bg-card p-8 md:p-12 shadow-card transition-all duration-1000 ${
               mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
             }`}
             style={{ 
