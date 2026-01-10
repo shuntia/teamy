@@ -5,7 +5,10 @@
 
 export function updateFaviconBadge(count: number) {
   // Use the actual logo image instead of drawing from scratch
-  updateFaviconBadgeWithImage(count, '/logo.png')
+  // Fire and forget - errors are handled internally
+  updateFaviconBadgeWithImage(count, '/logo.png').catch(() => {
+    // Error already logged in updateFaviconBadgeWithImage
+  })
 }
 
 /**

@@ -219,7 +219,7 @@ export function HomeNav({ variant = 'default', mobileButton }: HomeNavProps) {
       )}
 
       {/* Mobile Navigation */}
-      <div className="md:hidden">
+      <div className="md:hidden relative">
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className={cn(
@@ -239,7 +239,7 @@ export function HomeNav({ variant = 'default', mobileButton }: HomeNavProps) {
         
         {mobileMenuOpen && (
           <div className={cn(
-            "absolute top-full left-0 right-0 border-b backdrop-blur-xl max-h-[80vh] overflow-y-auto",
+            "absolute top-full left-0 right-0 border-b backdrop-blur-xl max-h-[80vh] overflow-y-auto z-[9999]",
             isLight 
               ? "bg-teamy-primary/95 dark:bg-popover/95 border-white/10" 
               : "bg-background/95 border-border"
