@@ -8,11 +8,23 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { CalendarCheck } from 'lucide-react'
 
-export function DemoRequestDialog() {
+interface DemoRequestDialogProps {
+  buttonText?: string
+  fieldLabel?: string
+  fieldPlaceholder?: string
+  apiEndpoint?: string
+}
+
+export function DemoRequestDialog({ 
+  buttonText = 'Schedule Demo!',
+  fieldLabel = 'School Name',
+  fieldPlaceholder = 'Your School Name',
+  apiEndpoint = '/api/demo-requests'
+}: DemoRequestDialogProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [email, setEmail] = useState('')
-  const [schoolName, setSchoolName] = useState('')
+  const [fieldValue, setFieldValue] = useState('')
   const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,14 +32,14 @@ export function DemoRequestDialog() {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/demo-requests', {
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           email,
-          schoolName,
+          schoolName: fieldValue, // Keep backend field name consistent
         }),
       })
 
@@ -42,7 +54,7 @@ export function DemoRequestDialog() {
       })
 
       setEmail('')
-      setSchoolName('')
+      setFieldValue('')
       setOpen(false)
     } catch (error) {
       toast({
@@ -63,7 +75,7 @@ export function DemoRequestDialog() {
           className="gap-2 bg-teamy-primary hover:bg-teamy-primary-dark text-white shadow-lg hover:shadow-xl transition-all"
         >
           <CalendarCheck className="h-5 w-5" />
-          Schedule Demo!
+          {buttonText}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
@@ -79,7 +91,7 @@ export function DemoRequestDialog() {
             <Input
               id="email"
               type="email"
-              placeholder="you@school.edu"
+              placeholder="example@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -87,13 +99,13 @@ export function DemoRequestDialog() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="schoolName">School Name *</Label>
+            <Label htmlFor="fieldValue">{fieldLabel} *</Label>
             <Input
-              id="schoolName"
+              id="fieldValue"
               type="text"
-              placeholder="Your School Name"
-              value={schoolName}
-              onChange={(e) => setSchoolName(e.target.value)}
+              placeholder={fieldPlaceholder}
+              value={fieldValue}
+              onChange={(e) => setFieldValue(e.target.value)}
               required
               disabled={loading}
             />

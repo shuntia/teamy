@@ -453,7 +453,7 @@ export function GrantFormContent({ isAuthenticated: initialIsAuthenticated }: Gr
                                 id="applicantName"
                                 value={formData.applicantName}
                                 onChange={(e) => setFormData({ ...formData, applicantName: e.target.value })}
-                                placeholder="Your full name"
+                                placeholder="example"
                                 required
                               />
                             </div>
@@ -464,7 +464,7 @@ export function GrantFormContent({ isAuthenticated: initialIsAuthenticated }: Gr
                                 type="email"
                                 value={formData.applicantEmail}
                                 onChange={(e) => setFormData({ ...formData, applicantEmail: e.target.value })}
-                                placeholder="your.email@example.com"
+                                placeholder="example@example.com"
                                 required
                               />
                             </div>
@@ -477,7 +477,7 @@ export function GrantFormContent({ isAuthenticated: initialIsAuthenticated }: Gr
                               type="email"
                               value={formData.confirmEmail}
                               onChange={(e) => setFormData({ ...formData, confirmEmail: e.target.value })}
-                              placeholder="Confirm your email"
+                              placeholder="example@example.com"
                               required
                             />
                           </div>
@@ -492,7 +492,7 @@ export function GrantFormContent({ isAuthenticated: initialIsAuthenticated }: Gr
                                     id="coachName"
                                     value={formData.coachName}
                                     onChange={(e) => setFormData({ ...formData, coachName: e.target.value })}
-                                    placeholder="Coach's full name"
+                                    placeholder="example"
                                     required={formData.contactRole === 'officer'}
                                   />
                                 </div>
@@ -503,7 +503,7 @@ export function GrantFormContent({ isAuthenticated: initialIsAuthenticated }: Gr
                                     type="email"
                                     value={formData.coachEmail}
                                     onChange={(e) => setFormData({ ...formData, coachEmail: e.target.value })}
-                                    placeholder="coach.email@school.edu"
+                                    placeholder="example@example.com"
                                     required={formData.contactRole === 'officer'}
                                   />
                                 </div>

@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dialog'
 import { SignInButton } from '@/components/signin-button'
 import { useSession } from 'next-auth/react'
+import { DemoRequestDialog } from '@/components/demo-request-dialog'
 
 interface HostTournamentContentProps {
   isAuthenticated: boolean
@@ -674,7 +675,7 @@ export function HostTournamentContent({ isAuthenticated: initialIsAuthenticated 
                                 id="directorName"
                                 value={formData.directorName}
                                 onChange={(e) => setFormData({ ...formData, directorName: e.target.value })}
-                                placeholder="John Smith"
+                                placeholder="example"
                                 required
                               />
                             </div>
@@ -702,7 +703,7 @@ export function HostTournamentContent({ isAuthenticated: initialIsAuthenticated 
                                       setEmailError('')
                                     }
                                   }}
-                                  placeholder="director@school.edu"
+                                  placeholder="example@example.com"
                                   required
                                   className={emailError ? 'border-destructive' : ''}
                                 />
@@ -733,7 +734,7 @@ export function HostTournamentContent({ isAuthenticated: initialIsAuthenticated 
                                       setEmailError('')
                                     }
                                   }}
-                                  placeholder="director@school.edu"
+                                  placeholder="example@example.com"
                                   required
                                   className={emailError ? 'border-destructive' : ''}
                                 />
@@ -830,7 +831,16 @@ export function HostTournamentContent({ isAuthenticated: initialIsAuthenticated 
         </Card>
 
         {/* Questions Link */}
-        <div className="mt-8 text-center">
+        <div className="mt-8 text-center space-y-6">
+          {/* Demo Request Button */}
+          <div>
+            <DemoRequestDialog 
+              buttonText="Schedule Tournament Hosting Demo!"
+              fieldLabel="Tournament Name"
+              fieldPlaceholder="e.g., Los Altos Invitational"
+            />
+          </div>
+          
           <p className="text-muted-foreground">
             Have questions about hosting a tournament?{' '}
             <Link href="/contact" className="text-teamy-primary hover:underline font-semibold">
