@@ -66,10 +66,16 @@ function resolveCallbackUrl(rawCallbackUrl?: string, defaultUrl?: string) {
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const session = await getServerSession(authOptions)
 
+  // Calculate callback URL for both logged-in and logged-out states
+  let callbackUrl = '/no-clubs' // default
+  
   if (session?.user) {
     const defaultRedirect = await getDefaultRedirect(session.user.id)
-    const callbackUrl = resolveCallbackUrl(searchParams?.callbackUrl, defaultRedirect)
+    callbackUrl = resolveCallbackUrl(searchParams?.callbackUrl, defaultRedirect)
     redirect(callbackUrl)
+  } else {
+    // For non-logged-in users, use the callback from query params or default
+    callbackUrl = resolveCallbackUrl(searchParams?.callbackUrl)
   }
 
   return (
