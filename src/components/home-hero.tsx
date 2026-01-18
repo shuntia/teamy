@@ -70,21 +70,21 @@ export function HomeHero({ isLoggedIn, loggedInRedirect }: HomeHeroProps) {
 
         {/* FERPA & COPPA Compliance Badge */}
         <ScrollAnimate animation="fade-scale" delay={500} duration={800}>
-          <div className="pt-8 px-4 w-full max-w-6xl mx-auto">
-            <div className="rounded-2xl border-2 border-teamy-primary/20 bg-card p-8 w-full">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex-1 text-center md:text-left">
-                  <h3 className="text-2xl sm:text-3xl font-bold text-foreground mb-3">Safety and Security</h3>
-                  <p className="text-sm sm:text-base text-muted-foreground">
-                    Protecting your data is our priority. At Teamy, we strive to follow industry best practices when it comes to security and compliance.{' '}
-                    <a href="/privacy" className="text-teamy-primary hover:underline font-medium">Learn More</a>.
+          <div className="pt-6 px-4 w-full max-w-3xl mx-auto">
+            <div className="rounded-xl border border-border/50 bg-card/50 p-4 sm:p-5 w-full">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <div className="flex-1 text-center sm:text-left">
+                  <h3 className="text-base sm:text-lg font-semibold text-foreground mb-1">Safety and Security</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    We follow industry best practices for security and compliance.{' '}
+                    <a href="/privacy" className="text-teamy-primary hover:underline font-medium">Learn More</a>
                   </p>
                 </div>
-                <div className="flex gap-4 flex-shrink-0">
-                  <div className="flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-blue-500 text-white font-bold text-lg sm:text-xl shadow-lg">
+                <div className="flex gap-3 flex-shrink-0">
+                  <div className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-blue-500/90 text-white font-semibold text-sm shadow-sm">
                     FERPA
                   </div>
-                  <div className="flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-blue-500 text-white font-bold text-lg sm:text-xl shadow-lg">
+                  <div className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-green-500/90 text-white font-semibold text-sm shadow-sm">
                     COPPA
                   </div>
                 </div>

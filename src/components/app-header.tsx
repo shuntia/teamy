@@ -37,10 +37,13 @@ interface AppHeaderProps {
   title?: string
   clubId?: string // Current club ID
   clubs?: Club[] // List of clubs user belongs to
+  allClubs?: Club[] // All clubs (for non-club pages like billing/customization)
   onClubChange?: (clubId: string) => void
+  showCustomizationBilling?: boolean // Override to show customization/billing buttons
+  currentPath?: string // Current path for highlighting active button
 }
 
-export function AppHeader({ user, showBackButton = false, backHref, title, clubId, clubs, onClubChange }: AppHeaderProps) {
+export function AppHeader({ user, showBackButton = false, backHref, title, clubId, clubs, allClubs, onClubChange, showCustomizationBilling: showCustomizationBillingProp, currentPath }: AppHeaderProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [editUsernameOpen, setEditUsernameOpen] = useState(false)
@@ -48,12 +51,14 @@ export function AppHeader({ user, showBackButton = false, backHref, title, clubI
   const [createClubOpen, setCreateClubOpen] = useState(false)
   const [joinClubOpen, setJoinClubOpen] = useState(false)
   
-  // Show customization and billing on club pages
+  // Show customization and billing on club pages OR when explicitly set
   const isOnClubPage = pathname?.startsWith('/club/')
-  const showCustomizationBilling = isOnClubPage
-  const showClubDropdown = isOnClubPage && clubs && clubs.length > 0
+  const showCustomizationBilling = showCustomizationBillingProp ?? isOnClubPage
+  const showClubDropdown = (isOnClubPage && clubs && clubs.length > 0) || (allClubs && allClubs.length > 1)
 
   const currentClub = clubs?.find(c => c.id === clubId)
+  const effectiveClubs = clubs || allClubs || []
+  const effectivePath = currentPath || pathname
 
   const handleSignOut = async () => {
     try {
@@ -78,18 +83,18 @@ export function AppHeader({ user, showBackButton = false, backHref, title, clubI
           <div className="flex items-center gap-3 md:gap-4 min-w-0">
             <Logo size="md" className="flex-shrink-0" href="/" variant="light" />
             
-            {showClubDropdown && currentClub ? (
+            {showClubDropdown ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2 px-3 py-1.5 text-sm sm:text-base md:text-lg text-white font-semibold hover:bg-white/10 rounded-lg transition-colors truncate max-w-[150px] sm:max-w-[200px] md:max-w-[300px]">
-                    <span className="truncate">{currentClub.name}</span>
+                    <span className="truncate">{currentClub?.name || 'Clubs'}</span>
                     <ChevronDown className="h-4 w-4 flex-shrink-0" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-64">
                   <DropdownMenuLabel>Switch Club</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {clubs.map((club) => (
+                  {effectiveClubs.map((club) => (
                     <DropdownMenuItem
                       key={club.id}
                       onClick={() => handleClubChange(club.id)}
@@ -124,7 +129,7 @@ export function AppHeader({ user, showBackButton = false, backHref, title, clubI
                     router.push(`/customization?from=${encodeURIComponent(pathname)}`)
                   }}
                   className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors rounded-lg ${
-                    pathname === '/customization'
+                    effectivePath === '/customization'
                       ? 'bg-white/20 text-white font-semibold'
                       : 'text-white/80 hover:text-white hover:bg-white/10'
                   }`}
@@ -137,7 +142,7 @@ export function AppHeader({ user, showBackButton = false, backHref, title, clubI
                     router.push(`/billing?from=${encodeURIComponent(pathname)}`)
                   }}
                   className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors rounded-lg ${
-                    pathname === '/billing'
+                    effectivePath === '/billing'
                       ? 'bg-white/20 text-white font-semibold'
                       : 'text-white/80 hover:text-white hover:bg-white/10'
                   }`}

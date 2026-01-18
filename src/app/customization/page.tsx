@@ -23,6 +23,21 @@ export default async function CustomizationPage() {
     },
   })
 
+  // Fetch user's clubs for the header dropdown
+  const memberships = await prisma.membership.findMany({
+    where: { userId: session.user.id },
+    include: {
+      club: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' }
+  })
+
+  const allClubs = memberships.map(m => m.club)
   const preferences = (user?.preferences as Record<string, unknown>) || null
 
   return (
@@ -34,6 +49,7 @@ export default async function CustomizationPage() {
         image: user?.image || session.user.image,
       }}
       preferences={preferences}
+      allClubs={allClubs}
     />
   )
 }

@@ -82,9 +82,11 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
   const [isRedeemingPromo, setIsRedeemingPromo] = useState(false)
   const [assigningBoostTo, setAssigningBoostTo] = useState<string | null>(null)
   
-  // Go back to where we came from, or fall back based on clubs
+  // Go back to where we came from, but skip if it's another settings page
   const fromPath = searchParams.get('from')
-  const backHref = fromPath || (clubs.length > 0 ? `/club/${clubs[0].id}` : '/no-clubs')
+  const isFromSettingsPage = fromPath === '/billing' || fromPath === '/customization'
+  const defaultBackHref = clubs.length > 0 ? `/club/${clubs[0].id}` : '/no-clubs'
+  const backHref = (fromPath && !isFromSettingsPage) ? fromPath : defaultBackHref
   
   // Check for success/cancel messages and verify subscription
   useEffect(() => {
@@ -284,7 +286,12 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
   
   return (
     <div className="min-h-screen bg-background grid-pattern">
-      <AppHeader user={user} />
+      <AppHeader 
+        user={user} 
+        allClubs={clubs.map(c => ({ id: c.id, name: c.name }))}
+        currentPath="/billing"
+        showCustomizationBilling={true}
+      />
       
       <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-8">
@@ -293,7 +300,7 @@ export function BillingClient({ user, clubs, subscriptionStatus, subscriptionTyp
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to dashboard
+            Back
           </Link>
           <h1 className="font-heading text-3xl font-bold text-foreground">Billing & Subscriptions</h1>
           <p className="text-muted-foreground mt-2">Manage your Pro subscription and club boosts</p>

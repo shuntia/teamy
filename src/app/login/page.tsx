@@ -44,7 +44,7 @@ async function getDefaultRedirect(userId: string) {
 
 function resolveCallbackUrl(rawCallbackUrl?: string, defaultUrl?: string) {
   if (!rawCallbackUrl) {
-    return defaultUrl || '/no-clubs'
+    return defaultUrl || '/auth/callback'
   }
 
   if (rawCallbackUrl.startsWith('/')) {
@@ -60,22 +60,22 @@ function resolveCallbackUrl(rawCallbackUrl?: string, defaultUrl?: string) {
     // Ignore parsing errors and fallback to default
   }
 
-  return defaultUrl || '/no-clubs'
+  return defaultUrl || '/auth/callback'
 }
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const session = await getServerSession(authOptions)
 
   // Calculate callback URL for both logged-in and logged-out states
-  let callbackUrl = '/no-clubs' // default
+  let callbackUrl = '/auth/callback' // default redirect handler
   
   if (session?.user) {
     const defaultRedirect = await getDefaultRedirect(session.user.id)
     callbackUrl = resolveCallbackUrl(searchParams?.callbackUrl, defaultRedirect)
     redirect(callbackUrl)
   } else {
-    // For non-logged-in users, use the callback from query params or default
-    callbackUrl = resolveCallbackUrl(searchParams?.callbackUrl)
+    // For non-logged-in users, use the callback from query params or default to auth callback
+    callbackUrl = resolveCallbackUrl(searchParams?.callbackUrl, '/auth/callback')
   }
 
   return (

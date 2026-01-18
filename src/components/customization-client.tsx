@@ -44,6 +44,10 @@ interface CustomizationClientProps {
     image?: string | null
   }
   preferences: Record<string, unknown> | null
+  allClubs: {
+    id: string
+    name: string
+  }[]
 }
 
 // Circular Gradient Direction Picker Component
@@ -230,14 +234,16 @@ function SortableColorItem({
   )
 }
 
-export function CustomizationClient({ user, preferences }: CustomizationClientProps) {
+export function CustomizationClient({ user, preferences, allClubs }: CustomizationClientProps) {
   const { toast } = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  // Go back to where we came from, or fall back to no-clubs
+  // Go back to where we came from, but skip if it's another settings page
   const fromPath = searchParams.get('from')
-  const backHref = fromPath || '/no-clubs'
+  const isFromSettingsPage = fromPath === '/billing' || fromPath === '/customization'
+  const defaultBackHref = allClubs.length > 0 ? `/club/${allClubs[0].id}` : '/no-clubs'
+  const backHref = (fromPath && !isFromSettingsPage) ? fromPath : defaultBackHref
 
   const defaultColors = {
     backgroundColor: '#f8fafc',
@@ -661,7 +667,12 @@ export function CustomizationClient({ user, preferences }: CustomizationClientPr
 
   return (
     <div className="min-h-screen bg-background grid-pattern">
-      <AppHeader user={user} />
+      <AppHeader 
+        user={user} 
+        allClubs={allClubs}
+        currentPath="/customization"
+        showCustomizationBilling={true}
+      />
       
       <main className="max-w-4xl mx-auto px-4 py-8">
         <div className="mb-8">
@@ -670,7 +681,7 @@ export function CustomizationClient({ user, preferences }: CustomizationClientPr
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to dashboard
+            Back
           </Link>
           <h1 className="font-heading text-3xl font-bold text-foreground">Customization</h1>
           <p className="text-muted-foreground mt-2">Personalize your Teamy experience across the entire site</p>
